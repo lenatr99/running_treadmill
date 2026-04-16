@@ -1,0 +1,108 @@
+day,date,workout_type,total_minutes,segments,goal,requires_activity_file
+1,2026-02-19,easy_hills,45,10m@8/0 + 10m@8/0 + 10m@6/12 + 10m@8/0 + 5m@7/0,Solid easy run with a hill block,yes
+2,2026-02-20,rest,0,Rest day,Recovery,no
+3,2026-02-21,speed,42,10m@7.5/0 + 8x(1m@12/0 + 90s@7/0) + 12m@7/0,Fast flat intervals,yes
+4,2026-02-22,long_easy_hills,55,10m@7.5/0 + 15m@7.5/0 + 12m@6/12 + 13m@7.5/0 + 5m@7/0,Long run with 12 min hill,yes
+5,2026-02-23,rest,0,Rest day or 30m walk,Recovery,no
+6,2026-02-24,tempo,48,10m@7.5/0 + 3x(8m@10.5/0 + 2m@7/0) + 8m@7/0,Tempo at threshold pace,yes
+7,2026-02-25,rest,0,Rest day,Recovery,no
+8,2026-02-26,easy_hills,50,10m@7.5/0 + 10m@7.5/0 + 14m@6/12 + 11m@7.5/0 + 5m@7/0,Easy volume with longer hill block,yes
+9,2026-02-27,speed,46,10m@7.5/0 + 10x(1m@12/0 + 90s@7/0) + 11m@7/0,More reps at same speed — build endurance at 12,yes
+10,2026-02-28,rest,0,Rest day,Recovery,no
+11,2026-03-01,long_progression_hills,60,10m@7.5/0 + 15m@7.5/0 + 14m@6/12 + 10m@9/0 + 6m@10/0 + 5m@7/0,Long run: longer hill then moderate finish,yes
+12,2026-03-02,recovery_run,38,10m@7.5/0 + 23m@8/0 + 5m@7/0,"Flush run, but nudge easy pace up",yes
+13,2026-03-03,speed,49,10m@7.5/0 + 12x(1m@12.5/0 + 75s@7/0) + 12m@7/0,"Start 12.5 with more density, not just a pace bump",yes
+14,2026-03-04,rest,0,Rest day,Recovery,no
+15,2026-03-05,tempo,52,10m@7.5/0 + 2x(15m@11/0 + 3m@7/0) + 6m@7/0,Move threshold work to 11 km/h sooner,yes
+16,2026-03-06,rest,0,Rest day or easy walking only,Foot reset after pain flare and failed workout,no
+17,2026-04-06,recovery_run,28,3m@5/0 + 5x(2m@7/0 + 2m@5/0) + 5m@5/0,Walk/run return — test the back gently,yes
+18,2026-04-07,rest,0,Rest day,Recovery,no
+19,2026-04-08,recovery_run,28,3m@5/0 + 5x(2m@7/0 + 2m@5/0) + 5m@5/0,Walk/run — same pattern to build consistency,yes
+20,2026-04-09,rest,0,Rest day,Recovery,no
+21,2026-04-10,recovery_run,30,3m@5/0 + 6x(2m@7/0 + 2m@5/0) + 3m@5/0,Walk/run — one more interval added,yes
+22,2026-04-11,rest,0,Rest day,Recovery,no
+23,2026-04-12,rest,0,Rest day,Extra rest to close week 1,no
+24,2026-04-13,recovery_run,30,3m@5/0 + 5x(3m@7/0 + 2m@5/0) + 2m@5/0,Walk/run — longer jog intervals,yes
+25,2026-04-14,rest,0,Rest day,Recovery,no
+26,2026-04-15,recovery_run,32,3m@5/0 + 5x(4m@7/0 + 1m@5/0) + 4m@5/0,Walk/run — 4 min jog blocks with short walks,yes
+27,2026-04-16,rest,0,Rest day,Recovery,no
+28,2026-04-17,recovery_run,35,3m@5/0 + 6x(4m@7/0 + 1m@5/0) + 2m@5/0,Walk/run — longest session yet,yes
+29,2026-04-18,rest,0,Rest day,Recovery,no
+30,2026-04-19,easy,30,5m@6.5/0 + 20m@7/0 + 5m@6.5/0,First continuous easy run — go by feel,yes
+31,2026-04-20,rest,0,Rest day,Recovery after first continuous run,no
+32,2026-04-21,easy,35,10m@7/0 + 20m@7.5/0 + 5m@7/0,Easy flat — rebuild aerobic base,yes
+33,2026-04-22,rest,0,Rest day,Recovery,no
+34,2026-04-23,easy,35,10m@7/0 + 20m@7.5/0 + 5m@7/0,Easy flat — consistency matters,yes
+35,2026-04-24,rest,0,Rest day,Recovery,no
+36,2026-04-25,easy,38,10m@7.5/0 + 23m@7.5/0 + 5m@7/0,Easy flat — nudge volume up,yes
+37,2026-04-26,rest,0,Rest day,Recovery,no
+38,2026-04-27,easy,38,10m@7.5/0 + 23m@7.5/0 + 5m@7/0,Easy flat — hold steady,yes
+39,2026-04-28,rest,0,Rest day,Recovery,no
+40,2026-04-29,easy,40,10m@7.5/0 + 18m@7.5/0 + 4x(1m@9.5/0 + 1m@7/0) + 4m@7/0,Easy run with strides — first pace touches,yes
+41,2026-04-30,rest,0,Rest day,Recovery,no
+42,2026-05-01,easy,40,10m@7.5/0 + 25m@7.5/0 + 5m@7/0,Easy volume,yes
+43,2026-05-02,easy,42,10m@7.5/0 + 18m@7.5/0 + 6x(1m@10/0 + 1m@7/0) + 2m@7/0,Easy run with strides at 10 km/h,yes
+44,2026-05-03,rest,0,Rest day,Recovery,no
+45,2026-05-04,easy,40,10m@7.5/0 + 25m@7.5/0 + 5m@7/0,Easy aerobic run,yes
+46,2026-05-05,rest,0,Rest day,Recovery,no
+47,2026-05-06,tempo,42,10m@7.5/0 + 10m@7.5/0 + 2x(5m@10/0 + 3m@7/0) + 6m@7/0,Light tempo return — short blocks at 10,yes
+48,2026-05-07,rest,0,Rest day,Recovery,no
+49,2026-05-08,speed,42,10m@7.5/0 + 6x(1m@12/0 + 90s@7/0) + 17m@7/0,Speed reps return — easy 12 km/h touches,yes
+50,2026-05-09,rest,0,Rest day,Recovery,no
+51,2026-05-10,long_easy,48,10m@7.5/0 + 33m@7.5/0 + 5m@7/0,Long easy — rebuild endurance,yes
+52,2026-05-11,rest,0,Rest day,Recovery,no
+53,2026-05-12,easy_hills,42,10m@7.5/0 + 15m@7.5/0 + 5m@6.5/5 + 7m@7.5/0 + 5m@7/0,First incline test — 5 min at 5% only if back is fine,yes
+54,2026-05-13,rest,0,Rest day,Recovery,no
+55,2026-05-14,tempo,45,10m@7.5/0 + 10m@7.5/0 + 2x(6m@10.5/0 + 3m@7/0) + 7m@7/0,Tempo at 10.5 — build threshold,yes
+56,2026-05-15,rest,0,Rest day,Recovery,no
+57,2026-05-16,speed,44,10m@7.5/0 + 8x(1m@12/0 + 90s@7/0) + 14m@7/0,More reps at 12 — rebuild speed endurance,yes
+58,2026-05-17,long_easy,52,10m@7.5/0 + 37m@7.5/0 + 5m@7/0,Long easy — push duration gently,yes
+59,2026-05-18,rest,0,Rest day,Recovery,no
+60,2026-05-19,easy,42,10m@7.5/0 + 27m@8/0 + 5m@7/0,Easy run — nudge pace to 8,yes
+61,2026-05-20,rest,0,Rest day,Recovery,no
+62,2026-05-21,tempo,48,10m@7.5/0 + 10m@8/0 + 2x(8m@10.5/0 + 3m@7/0) + 6m@7/0,Longer tempo blocks at 10.5,yes
+63,2026-05-22,rest,0,Rest day,Recovery,no
+64,2026-05-23,speed,46,10m@7.5/0 + 8x(90s@12.5/0 + 90s@7/0) + 12m@7/0,First 12.5 km/h reps since comeback,yes
+65,2026-05-24,long_progression,55,10m@7.5/0 + 20m@8/0 + 10m@9.5/0 + 10m@10/0 + 5m@7/0,First progression run — moderate finish,yes
+66,2026-05-25,rest,0,Rest day,Recovery,no
+67,2026-05-26,easy_hills,42,10m@7.5/0 + 12m@8/0 + 8m@6.5/8 + 7m@8/0 + 5m@7/0,Incline at 8% — check back tolerance,yes
+68,2026-05-27,rest,0,Rest day,Recovery,no
+69,2026-05-28,tempo,50,10m@8/0 + 2x(10m@11/0 + 3m@7/0) + 4m@7.5/0 + 10m@7/0,Tempo at 11 — key checkpoint session,yes
+70,2026-05-29,speed,48,10m@8/0 + 6x(2m@13/0 + 2m@7/0) + 14m@7/0,First 13 km/h blocks — 2 min reps,yes
+71,2026-05-30,rest,0,Rest day,Recovery,no
+72,2026-05-31,long_progression,60,10m@8/0 + 20m@8/0 + 10m@10.5/0 + 10m@11/0 + 10m@7/0,Long run with threshold finish,yes
+73,2026-06-01,rest,0,Rest day,Deload week begins,no
+74,2026-06-02,recovery_run,35,10m@7.5/0 + 20m@7.5/0 + 5m@7/0,Deload — easy flush run,yes
+75,2026-06-03,rest,0,Rest day,Recovery,no
+76,2026-06-04,tempo,40,10m@7.5/0 + 15m@10/0 + 10m@7.5/0 + 5m@7/0,Deload — light tempo touch,yes
+77,2026-06-05,rest,0,Rest day,Recovery,no
+78,2026-06-06,speed,38,10m@7.5/0 + 5x(1m@12/0 + 2m@7/0) + 13m@7/0,Deload — short speed reminder,yes
+79,2026-06-07,long_easy,45,10m@8/0 + 30m@8/0 + 5m@7/0,Deload — easy long run,yes
+80,2026-06-08,rest,0,Rest day,Recovery,no
+81,2026-06-09,easy,42,10m@8/0 + 27m@8/0 + 5m@7/0,Easy run — resume building,yes
+82,2026-06-10,rest,0,Rest day,Recovery,no
+83,2026-06-11,tempo,52,10m@8/0 + 2x(12m@11.5/0 + 3m@7/0) + 12m@7/0,Tempo at 11.5 — push threshold higher,yes
+84,2026-06-12,speed,50,10m@8/0 + 4x(3m@13.5/0 + 2m@7/0) + 10m@7.5/0 + 10m@7/0,First 13.5 km/h blocks — 3 min reps,yes
+85,2026-06-13,rest,0,Rest day,Recovery,no
+86,2026-06-14,long_progression,65,10m@8/0 + 20m@8.5/0 + 12m@11/0 + 10m@12/0 + 13m@7/0,Long run with 12 km/h finish — race readiness check,yes
+87,2026-06-15,rest,0,Rest day,Recovery,no
+88,2026-06-16,easy_hills,42,10m@8/0 + 10m@8/0 + 8m@6.5/10 + 9m@8/0 + 5m@7/0,Hill strength at 10% — back permitting,yes
+89,2026-06-17,rest,0,Rest day,Recovery,no
+90,2026-06-18,tempo,55,10m@8/0 + 20m@12/0 + 5m@7.5/0 + 12m@12.5/0 + 8m@7/0,Tempo at 12-12.5 — race-adjacent effort,yes
+91,2026-06-19,speed,50,10m@8/0 + 4x(3m@14/0 + 3m@7/0) + 16m@7/0,First goal-pace blocks — 3 min at 14,yes
+92,2026-06-20,rest,0,Rest day,Recovery,no
+93,2026-06-21,long_progression,68,10m@8.5/0 + 20m@9/0 + 12m@12/0 + 10m@13/0 + 8m@13.5/0 + 8m@7/0,Long run finishing fast — race rehearsal,yes
+94,2026-06-22,rest,0,Rest day,Recovery,no
+95,2026-06-23,easy,40,10m@8/0 + 25m@8/0 + 5m@7/0,Easy support day,yes
+96,2026-06-24,rest,0,Rest day,Recovery,no
+97,2026-06-25,tempo,52,10m@8/0 + 25m@12.5/0 + 5m@7.5/0 + 5m@13/0 + 7m@7/0,Strong tempo with 13 km/h finish,yes
+98,2026-06-26,speed,48,10m@8/0 + 5x(3m@14/0 + 2m@7/0) + 13m@7/0,Goal-pace repeatability — 5 reps at 14,yes
+99,2026-06-27,rest,0,Rest day,Recovery,no
+100,2026-06-28,long_progression,60,10m@8.5/0 + 15m@9/0 + 10m@12/0 + 8m@13.5/0 + 5m@14/0 + 12m@7/0,Last long run — includes goal-pace finish,yes
+101,2026-06-29,rest,0,Rest day,Taper begins,no
+102,2026-06-30,easy,35,10m@8/0 + 20m@8/0 + 5m@7/0,Taper — easy shakeout,yes
+103,2026-07-01,speed,40,10m@8/0 + 4x(2m@14/0 + 2m@7/0) + 14m@7/0,Taper — short sharp goal-pace reps,yes
+104,2026-07-02,rest,0,Rest day,Recovery,no
+105,2026-07-03,easy,25,10m@8/0 + 10m@8/0 + 5m@7/0,Taper — very light shakeout,yes
+106,2026-07-04,rest,0,Rest day,Full rest before the attempt,no
+107,2026-07-05,goal_race,35,10m@8.5/0 + 21.5m@14/0 + 3.5m@7/0,5K at 14 km/h — goal attempt,yes

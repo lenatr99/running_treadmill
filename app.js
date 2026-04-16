@@ -7,6 +7,10 @@ const FTMS_SERVICE         = '00001826-0000-1000-8000-00805f9b34fb';
 const FTMS_CONTROL_POINT   = '00002ad9-0000-1000-8000-00805f9b34fb';
 const TREADMILL_DATA_CHAR  = '00002acd-0000-1000-8000-00805f9b34fb';
 
+// Heart Rate Service UUIDs (Bluetooth SIG standard — works with Polar H10)
+const HR_SERVICE           = '0000180d-0000-1000-8000-00805f9b34fb';
+const HR_MEASUREMENT       = '00002a37-0000-1000-8000-00805f9b34fb';
+
 // Control point opcodes
 const CP = {
   REQUEST_CONTROL : 0x00,
@@ -214,6 +218,64 @@ function setConnectStatus(msg, cls) {
 }
 
 // ─────────────────────────────────────────────────────────
+//  Heart Rate / Polar H10
+// ─────────────────────────────────────────────────────────
+let hrDevice = null;
+let currentHR = null;
+
+async function hrConnect() {
+  setHRStatus('Scanning for Polar H10…', '');
+  hrDevice = await navigator.bluetooth.requestDevice({
+    filters: [{ services: [HR_SERVICE] }],
+    optionalServices: [HR_SERVICE],
+  });
+  hrDevice.addEventListener('gattserverdisconnected', onHRDisconnected);
+
+  setHRStatus('Connecting…', '');
+  const server  = await hrDevice.gatt.connect();
+  const service = await server.getPrimaryService(HR_SERVICE);
+  const hrChar  = await service.getCharacteristic(HR_MEASUREMENT);
+
+  await hrChar.startNotifications();
+  hrChar.addEventListener('characteristicvaluechanged', onHRMeasurement);
+
+  setHRStatus(`${hrDevice.name || 'HR Monitor'} connected`, 'ok');
+  document.getElementById('btn-connect-hr').classList.add('connected');
+  document.getElementById('connect-hr-label').textContent = hrDevice.name || 'HR Monitor';
+}
+
+function onHRDisconnected() {
+  currentHR = null;
+  document.getElementById('active-hr').textContent = '–';
+  document.getElementById('btn-connect-hr').classList.remove('connected');
+  document.getElementById('connect-hr-label').textContent = 'Polar H10';
+  setHRStatus('HR monitor disconnected', 'err');
+}
+
+function onHRMeasurement(event) {
+  // Heart Rate Measurement characteristic format:
+  // Byte 0: flags  — bit 0: 0=uint8 HR, 1=uint16 HR
+  // Byte 1 (+ maybe 2): heart rate value
+  const data  = event.target.value;
+  const flags = data.getUint8(0);
+  const hr    = (flags & 0x01) ? data.getUint16(1, true) : data.getUint8(1);
+  currentHR   = hr;
+  document.getElementById('active-hr').textContent = hr;
+}
+
+function setHRStatus(msg, cls) {
+  const el = document.getElementById('connect-status');
+  // Append to existing status if treadmill is already connected, else replace
+  const existing = el.textContent;
+  if (existing && !existing.includes('HR') && cls === 'ok') {
+    el.textContent = existing + '  ·  HR: ' + msg;
+  } else {
+    el.textContent = msg;
+    el.className = 'connect-status' + (cls ? ` ${cls}` : '');
+  }
+}
+
+// ─────────────────────────────────────────────────────────
 //  App state
 // ─────────────────────────────────────────────────────────
 let plan = [];
@@ -245,7 +307,16 @@ const App = {
         return;
       }
       try { await btConnect(); }
-      catch (e) { setConnectStatus(e.message || 'Connection failed', 'err'); }
+      catch (e) { setConnectStatus(e.message || 'Treadmill connection failed', 'err'); }
+    });
+
+    document.getElementById('btn-connect-hr').addEventListener('click', async () => {
+      if (!navigator.bluetooth) {
+        setConnectStatus('Web Bluetooth not available — open this page in Bluefy', 'err');
+        return;
+      }
+      try { await hrConnect(); }
+      catch (e) { setHRStatus(e.message || 'HR connection failed', 'err'); }
     });
   },
 

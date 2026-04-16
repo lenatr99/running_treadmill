@@ -57,6 +57,12 @@ header h1 {
   padding: 4px 8px 4px 0;
 }
 
+.header-buttons {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
 .btn-icon {
   display: flex;
   flex-direction: column;
@@ -70,6 +76,17 @@ header h1 {
 }
 .btn-icon.connected { color: var(--accent); }
 .btn-icon svg { width: 22px; height: 22px; }
+
+/* HR icon stays red when disconnected, green when connected */
+#btn-connect-hr { color: #c0392b; }
+#btn-connect-hr.connected { color: #e74c3c; animation: heartbeat 1s ease-in-out infinite; }
+
+@keyframes heartbeat {
+  0%, 100% { transform: scale(1); }
+  14% { transform: scale(1.15); }
+  28% { transform: scale(1); }
+  42% { transform: scale(1.1); }
+}
 
 /* ── Connect status ──────────────────────────────── */
 .connect-status {
@@ -243,18 +260,23 @@ header h1 {
 
 .active-metric-row {
   display: flex;
-  gap: 40px;
+  gap: 24px;
   justify-content: center;
+  align-items: flex-end;
 }
 .active-metric { text-align: center; }
 .metric-value {
-  font-size: 52px;
+  font-size: 48px;
   font-weight: 800;
   line-height: 1;
   color: var(--accent);
   letter-spacing: -1px;
 }
 .metric-label { font-size: 13px; color: var(--text2); margin-top: 2px; }
+
+/* Heart rate metric — slightly smaller, red */
+#hr-metric .metric-value { font-size: 40px; color: #e74c3c; }
+#hr-metric .metric-label { color: #e74c3c; opacity: 0.7; }
 
 /* Timer ring */
 .segment-timer {

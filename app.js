@@ -694,6 +694,11 @@ async function handleStravaCallback() {
       `${data.athlete?.firstname || ''} ${data.athlete?.lastname || ''}`.trim() || 'Athlete');
 
     updateStravaButtonState();
+
+    // If we're the OAuth popup tab, close ourselves — the opener listens via storage event.
+    if (window.opener) {
+      window.close();
+    }
   } catch (e) {
     console.error('Strava token exchange failed', e);
   }
@@ -831,10 +836,30 @@ Object.assign(App, {
     localStorage.setItem('stravaClientSecret', clientSecret);
 
     const redirect = encodeURIComponent(stravaRedirectUri());
-    window.location.href =
+    const authUrl =
       `https://www.strava.com/oauth/authorize?client_id=${clientId}` +
       `&response_type=code&redirect_uri=${redirect}` +
       `&approval_prompt=auto&scope=activity:write`;
+
+    // Open in a new tab so Bluefy keeps this page (and BLE connections) alive.
+    // When the popup lands back on this origin with ?code=, handleStravaCallback()
+    // will exchange the token, save it to localStorage, then close itself.
+    // We listen for that storage write here to update the UI.
+    const popup = window.open(authUrl, '_blank');
+    if (!popup) {
+      // Fallback: popup was blocked — navigate the whole page instead.
+      window.location.href = authUrl;
+      return;
+    }
+
+    const onStorage = (e) => {
+      if (e.key === 'stravaAthleteName' && e.newValue) {
+        window.removeEventListener('storage', onStorage);
+        updateStravaButtonState();
+        App.closeSettings();
+      }
+    };
+    window.addEventListener('storage', onStorage);
   },
 
   stravaDisconnect() {

@@ -530,3 +530,22 @@ header h1 {
   outline: none;
 }
 .settings-input:focus { border-color: var(--accent); }
+
+.settings-textarea {
+  min-height: 84px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.strava-auth-status {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text2);
+  background: var(--bg2);
+  border-radius: 10px;
+  padding: 12px;
+}
+.strava-auth-status.ok { color: var(--accent); }
+.strava-auth-status.err { color: var(--danger); }
+.strava-auth-status.hidden { display: none; }

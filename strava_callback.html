@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Strava Callback</title>
+  <style>
+    :root {
+      --bg: #0f0f0f;
+      --bg2: #1a1a1a;
+      --bg3: #252525;
+      --accent: #00d4aa;
+      --text: #f0f0f0;
+      --text2: #999;
+      --danger: #e74c3c;
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 24px 18px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card {
+      width: min(100%, 520px);
+      background: var(--bg2);
+      border-radius: 18px;
+      padding: 20px;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 22px;
+    }
+
+    p {
+      margin: 0 0 12px;
+      color: var(--text2);
+      line-height: 1.45;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 110px;
+      background: var(--bg3);
+      color: var(--text);
+      border: 1px solid var(--bg3);
+      border-radius: var(--radius);
+      padding: 12px;
+      font: inherit;
+      line-height: 1.4;
+      resize: vertical;
+      margin: 10px 0 14px;
+    }
+
+    button {
+      width: 100%;
+      border: none;
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      background: var(--accent);
+      color: #000;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .status {
+      margin-top: 12px;
+      color: var(--text2);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .status.ok { color: var(--accent); }
+    .status.err { color: var(--danger); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Strava Authorization</h1>
+    <p id="message">Checking authorization response…</p>
+    <textarea id="callback-url" readonly placeholder="The callback URL will appear here."></textarea>
+    <button id="copy-url" type="button">Copy Callback URL</button>
+    <div id="status" class="status"></div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const messageEl = document.getElementById('message');
+    const callbackEl = document.getElementById('callback-url');
+    const statusEl = document.getElementById('status');
+    const copyBtn = document.getElementById('copy-url');
+
+    function setStatus(msg, cls) {
+      statusEl.textContent = msg;
+      statusEl.className = 'status' + (cls ? ` ${cls}` : '');
+    }
+
+    if (code) {
+      callbackEl.value = window.location.href;
+      try {
+        localStorage.setItem('stravaPendingCode', code);
+      } catch (_) {
+        // Ignore storage issues and fall back to manual copy.
+      }
+
+      if (window.opener) {
+        messageEl.textContent = 'Authorization received. Returning the code to the workout app…';
+        setStatus('This tab should close automatically.', 'ok');
+        setTimeout(() => window.close(), 300);
+      } else {
+        messageEl.textContent =
+          'Authorization received. Copy this callback URL, return to Bluefy, and paste it into the Strava settings there.';
+        setStatus('You can paste either the full URL or just the code.', 'ok');
+      }
+    } else {
+      messageEl.textContent =
+        'No Strava authorization code was found on this page. Start the login flow again from the workout app.';
+      setStatus('Missing ?code= in the callback URL.', 'err');
+    }
+
+    copyBtn.addEventListener('click', async () => {
+      if (!callbackEl.value) {
+        setStatus('Nothing to copy yet.', 'err');
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(callbackEl.value);
+        setStatus('Callback URL copied. Go back to Bluefy and paste it there.', 'ok');
+      } catch (_) {
+        callbackEl.focus();
+        callbackEl.select();
+        setStatus('Long-press the text box to copy the callback URL.', '');
+      }
+    });
+  </script>
+</body>
+</html>

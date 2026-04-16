@@ -147,7 +147,26 @@
       <label class="settings-label">Client Secret
         <input id="input-client-secret" class="settings-input" type="password" placeholder="••••••••••••••••">
       </label>
-      <button class="btn-primary" onclick="App.stravaAuth()">Connect Strava</button>
+      <button class="btn-primary" onclick="App.stravaAuth()">Connect in Bluefy</button>
+
+      <p class="settings-hint">
+        If Google blocks login in Bluefy, use the fallback:
+        1. Tap "Prepare Safari/Chrome Login".
+        2. Open the generated link in Safari or Chrome and approve Strava there.
+        3. Copy the callback page URL and paste it back here in Bluefy.
+      </p>
+      <button class="btn-secondary" onclick="App.prepareStravaSafariAuth()">Prepare Safari/Chrome Login</button>
+
+      <label class="settings-label">Safari/Chrome auth link
+        <textarea id="input-auth-link" class="settings-input settings-textarea" readonly placeholder="Tap &quot;Prepare Safari/Chrome Login&quot; first"></textarea>
+      </label>
+
+      <label class="settings-label">Paste callback URL or code
+        <textarea id="input-auth-code" class="settings-input settings-textarea" placeholder="https://.../strava_callback.html?code=... or just the code"></textarea>
+      </label>
+
+      <button class="btn-secondary" onclick="App.completeStravaManualAuth()">Finish connection</button>
+      <div id="strava-auth-status" class="strava-auth-status hidden"></div>
     </div>
   </div>
 

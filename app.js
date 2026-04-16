@@ -301,6 +301,8 @@ const App = {
   async init() {
     // Handle Strava OAuth callback before rendering anything else
     await handleStravaCallback();
+    window.addEventListener('storage', onStravaStorage);
+    await handleStoredStravaCode();
     updateStravaButtonState();
 
     try {
@@ -656,51 +658,130 @@ ${trackpoints.join('\n')}
 // ─────────────────────────────────────────────────────────
 //  Strava OAuth2
 // ─────────────────────────────────────────────────────────
+function currentAppDir() {
+  const path = window.location.pathname;
+  return path.endsWith('/') ? path : path.slice(0, path.lastIndexOf('/') + 1);
+}
+
 function stravaRedirectUri() {
-  return window.location.origin + window.location.pathname;
+  return window.location.origin + currentAppDir() + 'strava_callback.html';
+}
+
+function buildStravaAuthUrl(clientId) {
+  const redirect = encodeURIComponent(stravaRedirectUri());
+  return (
+    `https://www.strava.com/oauth/authorize?client_id=${clientId}` +
+    `&response_type=code&redirect_uri=${redirect}` +
+    `&approval_prompt=auto&scope=activity:write`
+  );
+}
+
+function parseStravaAuthCode(value) {
+  const raw = (value || '').trim();
+  if (!raw) return '';
+
+  const directMatch = raw.match(/^[A-Za-z0-9_-]+$/);
+  if (directMatch) return raw;
+
+  const codeMatch = raw.match(/[?&]code=([^&]+)/);
+  return codeMatch ? decodeURIComponent(codeMatch[1]) : '';
+}
+
+function setStravaAuthStatus(msg, cls) {
+  const el = document.getElementById('strava-auth-status');
+  if (!el) return;
+  if (!msg) {
+    el.textContent = '';
+    el.className = 'strava-auth-status hidden';
+    return;
+  }
+  el.textContent = msg;
+  el.className = 'strava-auth-status' + (cls ? ` ${cls}` : '');
+}
+
+function saveStravaClientConfigFromInputs() {
+  const inputClientId = document.getElementById('input-client-id').value.trim();
+  const inputClientSecret = document.getElementById('input-client-secret').value.trim();
+  const savedClientId = localStorage.getItem('stravaClientId') || '';
+  const savedClientSecret = localStorage.getItem('stravaClientSecret') || '';
+
+  const clientId = inputClientId || savedClientId;
+  const clientSecret = inputClientSecret || (clientId === savedClientId ? savedClientSecret : '');
+  if (!clientId || !clientSecret) {
+    throw new Error('Enter Client ID and Client Secret first.');
+  }
+
+  localStorage.setItem('stravaClientId', clientId);
+  if (inputClientSecret) {
+    localStorage.setItem('stravaClientSecret', inputClientSecret);
+  }
+
+  return { clientId, clientSecret };
+}
+
+async function exchangeStravaCode(code) {
+  const clientId = localStorage.getItem('stravaClientId');
+  const clientSecret = localStorage.getItem('stravaClientSecret');
+  if (!clientId || !clientSecret) {
+    throw new Error('Missing Strava client settings in Bluefy.');
+  }
+
+  const resp = await fetch('https://www.strava.com/oauth/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_id: clientId,
+      client_secret: clientSecret,
+      code,
+      grant_type: 'authorization_code',
+    }),
+  });
+  const data = await resp.json();
+  if (!data.access_token) throw new Error(data.message || 'Token exchange failed');
+
+  const athleteName =
+    `${data.athlete?.firstname || ''} ${data.athlete?.lastname || ''}`.trim() || 'Athlete';
+
+  localStorage.setItem('stravaAccessToken', data.access_token);
+  localStorage.setItem('stravaRefreshToken', data.refresh_token);
+  localStorage.setItem('stravaTokenExpiry', data.expires_at);
+  localStorage.setItem('stravaAthleteName', athleteName);
+  localStorage.removeItem('stravaPendingCode');
+
+  updateStravaButtonState();
+  return athleteName;
 }
 
 async function handleStravaCallback() {
-  const params = new URLSearchParams(window.location.search);
-  const code = params.get('code');
+  const code = parseStravaAuthCode(window.location.href);
   if (!code) return;
 
-  // Clean the URL immediately so a refresh doesn't re-trigger this
+  // Preserve support for the old redirect URI that pointed back to the app page.
   window.history.replaceState({}, document.title, window.location.pathname);
-
-  const clientId     = localStorage.getItem('stravaClientId');
-  const clientSecret = localStorage.getItem('stravaClientSecret');
-  if (!clientId || !clientSecret) return;
 
   setUploadStatus('Connecting to Strava…', '');
   try {
-    const resp = await fetch('https://www.strava.com/oauth/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_id: clientId,
-        client_secret: clientSecret,
-        code,
-        grant_type: 'authorization_code',
-      }),
-    });
-    const data = await resp.json();
-    if (!data.access_token) throw new Error(data.message || 'Token exchange failed');
-
-    localStorage.setItem('stravaAccessToken',  data.access_token);
-    localStorage.setItem('stravaRefreshToken', data.refresh_token);
-    localStorage.setItem('stravaTokenExpiry',  data.expires_at);
-    localStorage.setItem('stravaAthleteName',
-      `${data.athlete?.firstname || ''} ${data.athlete?.lastname || ''}`.trim() || 'Athlete');
-
-    updateStravaButtonState();
-
-    // If we're the OAuth popup tab, close ourselves — the opener listens via storage event.
-    if (window.opener) {
-      window.close();
-    }
+    await exchangeStravaCode(code);
   } catch (e) {
     console.error('Strava token exchange failed', e);
+    setUploadStatus(`Strava connect failed: ${e.message}`, 'err');
+  }
+}
+
+async function handleStoredStravaCode() {
+  const code = localStorage.getItem('stravaPendingCode');
+  if (!code) return false;
+
+  setStravaAuthStatus('Finishing Strava connection…', '');
+  try {
+    const athleteName = await exchangeStravaCode(code);
+    setStravaAuthStatus(`Connected as ${athleteName}`, 'ok');
+    App.closeSettings();
+    return true;
+  } catch (e) {
+    console.error('Stored Strava code exchange failed', e);
+    setStravaAuthStatus(`Connection failed: ${e.message}`, 'err');
+    return false;
   }
 }
 
@@ -747,6 +828,20 @@ function updateStravaButtonState() {
   } else {
     btn.classList.remove('connected');
     lbl.textContent = 'Strava';
+  }
+}
+
+async function onStravaStorage(event) {
+  if (event.key === 'stravaPendingCode' && event.newValue) {
+    await handleStoredStravaCode();
+  }
+
+  if (event.key === 'stravaAthleteName') {
+    updateStravaButtonState();
+    if (event.newValue) {
+      setStravaAuthStatus(`Connected as ${event.newValue}`, 'ok');
+      App.closeSettings();
+    }
   }
 }
 
@@ -805,6 +900,10 @@ Object.assign(App, {
     // Pre-fill saved values
     document.getElementById('input-client-id').value     = localStorage.getItem('stravaClientId') || '';
     document.getElementById('input-client-secret').value = '';  // never pre-fill secrets
+    document.getElementById('input-auth-link').value =
+      localStorage.getItem('stravaClientId') ? buildStravaAuthUrl(localStorage.getItem('stravaClientId')) : '';
+    document.getElementById('input-auth-code').value = '';
+    setStravaAuthStatus('', '');
 
     const name = localStorage.getItem('stravaAthleteName');
     if (name) {
@@ -826,45 +925,87 @@ Object.assign(App, {
   },
 
   stravaAuth() {
-    const clientId     = document.getElementById('input-client-id').value.trim();
-    const clientSecret = document.getElementById('input-client-secret').value.trim();
-    if (!clientId || !clientSecret) {
-      alert('Enter both Client ID and Client Secret first.');
+    let clientId;
+    try {
+      ({ clientId } = saveStravaClientConfigFromInputs());
+    } catch (e) {
+      alert(e.message);
       return;
     }
-    localStorage.setItem('stravaClientId',     clientId);
-    localStorage.setItem('stravaClientSecret', clientSecret);
-
-    const redirect = encodeURIComponent(stravaRedirectUri());
-    const authUrl =
-      `https://www.strava.com/oauth/authorize?client_id=${clientId}` +
-      `&response_type=code&redirect_uri=${redirect}` +
-      `&approval_prompt=auto&scope=activity:write`;
+    setStravaAuthStatus('', '');
 
     // Open in a new tab so Bluefy keeps this page (and BLE connections) alive.
-    // When the popup lands back on this origin with ?code=, handleStravaCallback()
-    // will exchange the token, save it to localStorage, then close itself.
-    // We listen for that storage write here to update the UI.
-    const popup = window.open(authUrl, '_blank');
+    // The callback page writes the auth code to localStorage so this tab can finish the exchange.
+    const popup = window.open(buildStravaAuthUrl(clientId), '_blank');
     if (!popup) {
       // Fallback: popup was blocked — navigate the whole page instead.
-      window.location.href = authUrl;
+      window.location.href = buildStravaAuthUrl(clientId);
+    }
+  },
+
+  async prepareStravaSafariAuth() {
+    let clientId;
+    try {
+      ({ clientId } = saveStravaClientConfigFromInputs());
+    } catch (e) {
+      alert(e.message);
       return;
     }
 
-    const onStorage = (e) => {
-      if (e.key === 'stravaAthleteName' && e.newValue) {
-        window.removeEventListener('storage', onStorage);
-        updateStravaButtonState();
-        App.closeSettings();
+    const authUrl = buildStravaAuthUrl(clientId);
+    document.getElementById('input-auth-link').value = authUrl;
+
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(authUrl);
+        setStravaAuthStatus(
+          'Safari login link copied. Open it in Safari or Chrome, approve Strava, then paste the callback URL below.',
+          'ok'
+        );
+        return;
+      } catch (_) {
+        // Fall through to manual long-press copy instructions.
       }
-    };
-    window.addEventListener('storage', onStorage);
+    }
+
+    setStravaAuthStatus(
+      'Open the auth link above in Safari or Chrome, approve Strava, then paste the callback URL below.',
+      ''
+    );
+  },
+
+  async completeStravaManualAuth() {
+    try {
+      saveStravaClientConfigFromInputs();
+    } catch (e) {
+      alert(e.message);
+      return;
+    }
+
+    const raw = document.getElementById('input-auth-code').value;
+    const code = parseStravaAuthCode(raw);
+    if (!code) {
+      setStravaAuthStatus('Paste the full callback URL or the code from the callback page.', 'err');
+      return;
+    }
+
+    setStravaAuthStatus('Connecting to Strava…', '');
+    try {
+      const athleteName = await exchangeStravaCode(code);
+      document.getElementById('input-auth-code').value = '';
+      setStravaAuthStatus(`Connected as ${athleteName}`, 'ok');
+      App.closeSettings();
+    } catch (e) {
+      console.error('Manual Strava code exchange failed', e);
+      setStravaAuthStatus(`Connection failed: ${e.message}`, 'err');
+    }
   },
 
   stravaDisconnect() {
-    ['stravaAccessToken','stravaRefreshToken','stravaTokenExpiry','stravaAthleteName']
+    ['stravaAccessToken','stravaRefreshToken','stravaTokenExpiry','stravaAthleteName','stravaPendingCode']
       .forEach(k => localStorage.removeItem(k));
+    document.getElementById('input-auth-code').value = '';
+    setStravaAuthStatus('', '');
     updateStravaButtonState();
     App.closeSettings();
   },

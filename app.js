@@ -638,6 +638,8 @@ function tick() {
     currentTreadmillSpeed = 1.0;
     currentTreadmillIncline = 0;
     if (startupWarmupRemaining === 0) {
+      currentTreadmillSpeed = null;
+      currentTreadmillIncline = null;
       applyCurrentStepTarget().catch(() => {});
     }
     updateActiveUI();

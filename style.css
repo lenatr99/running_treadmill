@@ -222,6 +222,10 @@ header h1 {
 .btn-danger { background: var(--danger); color: #fff; }
 .btn-primary:active, .btn-secondary:active, .btn-danger:active { opacity: 0.75; }
 .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-secondary:disabled, .btn-danger:disabled, .btn-adjust:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
 /* ── Active Workout View ─────────────────────────── */
 #view-active {
@@ -277,6 +281,46 @@ header h1 {
 /* Heart rate metric — slightly smaller, red */
 #hr-metric .metric-value { font-size: 40px; color: #e74c3c; }
 #hr-metric .metric-label { color: #e74c3c; opacity: 0.7; }
+
+.active-adjust-grid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.adjust-card {
+  background: var(--bg2);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.adjust-title {
+  font-size: 12px;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+}
+
+.adjust-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.btn-adjust {
+  border: none;
+  border-radius: 10px;
+  background: var(--bg3);
+  color: var(--text);
+  padding: 12px 10px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-adjust:active { opacity: 0.75; }
 
 /* Timer ring */
 .segment-timer {

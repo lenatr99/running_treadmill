@@ -137,6 +137,10 @@ async function loadPlan() {
 // ─────────────────────────────────────────────────────────
 let btDevice = null;
 let btControlPoint = null;
+let btTreadmillData = null;
+let btCommandChain = Promise.resolve();
+let currentTreadmillSpeed = null;
+let currentTreadmillIncline = null;
 
 async function btConnect() {
   setConnectStatus('Scanning…', '');
@@ -150,10 +154,16 @@ async function btConnect() {
   const server  = await btDevice.gatt.connect();
   const service = await server.getPrimaryService(FTMS_SERVICE);
   btControlPoint = await service.getCharacteristic(FTMS_CONTROL_POINT);
+  btTreadmillData = await service.getCharacteristic(TREADMILL_DATA_CHAR);
+  btCommandChain = Promise.resolve();
 
   // Enable indications so we get control-point responses
   await btControlPoint.startNotifications();
   btControlPoint.addEventListener('characteristicvaluechanged', onCpResponse);
+
+  // Subscribe to live treadmill telemetry so the UI reflects actual speed/incline.
+  await btTreadmillData.startNotifications();
+  btTreadmillData.addEventListener('characteristicvaluechanged', onTreadmillData);
 
   // Request control
   await writeCP(new Uint8Array([CP.REQUEST_CONTROL]));
@@ -164,9 +174,14 @@ async function btConnect() {
 
 function onBtDisconnected() {
   btControlPoint = null;
+  btTreadmillData = null;
+  btCommandChain = Promise.resolve();
+  currentTreadmillSpeed = null;
+  currentTreadmillIncline = null;
   setConnectStatus('Disconnected — tap Connect to reconnect', 'err');
   document.getElementById('btn-connect').classList.remove('connected');
   document.getElementById('connect-label').textContent = 'Connect';
+  updateActiveUI();
 }
 
 function onCpResponse(event) {
@@ -180,7 +195,9 @@ function onCpResponse(event) {
 
 async function writeCP(bytes) {
   if (!btControlPoint) return;
-  await btControlPoint.writeValueWithResponse(bytes);
+  const op = btCommandChain.then(() => btControlPoint.writeValueWithResponse(bytes));
+  btCommandChain = op.catch(() => {});
+  await op;
 }
 
 async function btSetSpeed(kmh) {
@@ -209,6 +226,45 @@ async function btStartResume() {
 
 async function btStop() {
   await writeCP(new Uint8Array([CP.STOP_PAUSE, 0x01]));
+}
+
+function onTreadmillData(event) {
+  const data = event.target.value;
+  if (data.byteLength < 4) return;
+
+  const flags = data.getUint16(0, true);
+  let offset = 2;
+
+  // Bit 0 is inverted in FTMS treadmill data: 0 means instantaneous speed is present.
+  if ((flags & 0x0001) === 0 && data.byteLength >= offset + 2) {
+    currentTreadmillSpeed = data.getUint16(offset, true) / 100;
+    offset += 2;
+  }
+
+  if (flags & 0x0002) offset += 2; // Average speed
+  if (flags & 0x0004) offset += 3; // Total distance
+
+  if (flags & 0x0008 && data.byteLength >= offset + 4) {
+    currentTreadmillIncline = data.getInt16(offset, true) / 10;
+  }
+
+  if ((workoutActive || awaitingWorkoutStop) && !paused && !workoutFinishing) {
+    if ((currentTreadmillSpeed ?? 0) >= 0.8) {
+      hasSeenWorkoutMotion = true;
+    }
+
+    if (hasSeenWorkoutMotion && (currentTreadmillSpeed ?? 0) <= 0.1) {
+      zeroSpeedStreak++;
+      if (zeroSpeedStreak >= 2) {
+        finalizeWorkout('treadmill', false);
+        return;
+      }
+    } else {
+      zeroSpeedStreak = 0;
+    }
+  }
+
+  updateActiveUI();
 }
 
 function setConnectStatus(msg, cls) {
@@ -292,6 +348,72 @@ let timerHandle = null;
 let workoutSamples = [];   // [{speed_kmh, hr_bpm, incline_pct}] one per second
 let workoutStartTime = null;
 let workoutName = '';
+let workoutActive = false;
+let awaitingWorkoutStop = false;
+let workoutFinishing = false;
+let hasSeenWorkoutMotion = false;
+let zeroSpeedStreak = 0;
+
+function roundToStep(value, step) {
+  return Number((Math.round(value / step) * step).toFixed(3));
+}
+
+function clamp(value, min, max = Infinity) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getActiveStep() {
+  return activeSteps[activeStepIdx] || null;
+}
+
+function getDisplayedSpeed() {
+  const step = getActiveStep();
+  return currentTreadmillSpeed ?? step?.speed ?? null;
+}
+
+function getDisplayedIncline() {
+  const step = getActiveStep();
+  return currentTreadmillIncline ?? step?.incline ?? null;
+}
+
+function getPlannedProgressSeconds() {
+  let seconds = stepElapsed;
+  for (let i = 0; i < activeStepIdx; i++) {
+    seconds += activeSteps[i].duration;
+  }
+  return seconds;
+}
+
+function resetWorkoutRuntimeState() {
+  activeSteps = [];
+  activeStepIdx = 0;
+  stepElapsed = 0;
+  totalElapsed = 0;
+  totalDuration = 0;
+  paused = false;
+  timerHandle = null;
+  workoutActive = false;
+  awaitingWorkoutStop = false;
+  workoutFinishing = false;
+  hasSeenWorkoutMotion = false;
+  zeroSpeedStreak = 0;
+  currentTreadmillSpeed = null;
+  currentTreadmillIncline = null;
+}
+
+function updateActiveControlState() {
+  const pauseBtn = document.getElementById('btn-pause');
+  const skipBtn = document.getElementById('btn-skip');
+  const stopBtn = document.getElementById('btn-stop-active');
+  const adjustButtons = document.querySelectorAll('.btn-adjust');
+  if (!pauseBtn || !skipBtn || !stopBtn) return;
+
+  pauseBtn.disabled = awaitingWorkoutStop;
+  skipBtn.disabled = awaitingWorkoutStop;
+  adjustButtons.forEach(btn => { btn.disabled = workoutFinishing; });
+  pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+  stopBtn.textContent = awaitingWorkoutStop ? 'Finish' : 'Stop';
+}
 
 // ─────────────────────────────────────────────────────────
 //  App object (public API for inline handlers)
@@ -368,7 +490,8 @@ const App = {
   startWorkout() {
     if (!selectedWorkout || selectedWorkout.steps.length === 0) return;
 
-    activeSteps      = selectedWorkout.steps;
+    clearInterval(timerHandle);
+    activeSteps      = selectedWorkout.steps.map(step => ({ ...step }));
     activeStepIdx    = 0;
     stepElapsed      = 0;
     totalElapsed     = 0;
@@ -377,30 +500,61 @@ const App = {
     workoutSamples   = [];
     workoutStartTime = new Date();
     workoutName      = selectedWorkout.goal;
+    workoutActive    = true;
+    awaitingWorkoutStop = false;
+    workoutFinishing = false;
+    hasSeenWorkoutMotion = false;
+    zeroSpeedStreak = 0;
+    currentTreadmillSpeed = null;
+    currentTreadmillIncline = null;
 
     document.getElementById('active-title').textContent = selectedWorkout.goal;
-    document.getElementById('btn-pause').textContent = 'Pause';
 
     showView('active');
-    applyStep(0);
+    updateActiveControlState();
+    startCurrentSegment();
     timerHandle = setInterval(tick, 1000);
   },
 
   togglePause() {
+    if (awaitingWorkoutStop || workoutFinishing) return;
     paused = !paused;
-    document.getElementById('btn-pause').textContent = paused ? 'Resume' : 'Pause';
+    updateActiveControlState();
     if (paused) {
       writeCP(new Uint8Array([CP.STOP_PAUSE, 0x02])).catch(() => {});
     } else {
       btStartResume().catch(() => {});
+      applyCurrentStepTarget().catch(() => {});
     }
   },
 
   stopWorkout() {
-    clearInterval(timerHandle);
-    timerHandle = null;
-    btStop().catch(() => {});
-    showView('plan');
+    finalizeWorkout('app', true);
+  },
+
+  async adjustSpeed(delta) {
+    const step = getActiveStep();
+    if (!step || workoutFinishing) return;
+
+    step.speed = roundToStep(clamp((getDisplayedSpeed() ?? step.speed) + delta, 0), 0.1);
+    currentTreadmillSpeed = step.speed;
+    await btSetSpeed(step.speed).catch(() => {});
+    updateActiveUI();
+  },
+
+  async adjustIncline(delta) {
+    const step = getActiveStep();
+    if (!step || workoutFinishing) return;
+
+    step.incline = roundToStep(clamp((getDisplayedIncline() ?? step.incline) + delta, 0), 0.5);
+    currentTreadmillIncline = step.incline;
+    await btSetIncline(step.incline).catch(() => {});
+    updateActiveUI();
+  },
+
+  skipSegment() {
+    if (!getActiveStep() || awaitingWorkoutStop || workoutFinishing) return;
+    advanceToStep(activeStepIdx + 1);
   },
 };
 
@@ -408,81 +562,164 @@ const App = {
 //  Workout tick
 // ─────────────────────────────────────────────────────────
 function tick() {
-  if (paused) return;
+  if (paused || workoutFinishing || (!workoutActive && !awaitingWorkoutStop)) return;
 
-  stepElapsed++;
+  const currentStep = getActiveStep();
+  if (!currentStep) return;
+
   totalElapsed++;
 
-  // Record sample for this second
-  const currentStep = activeSteps[activeStepIdx];
   workoutSamples.push({
-    speed_kmh:   currentStep.speed,
+    speed_kmh:   getDisplayedSpeed() ?? (awaitingWorkoutStop ? 1.0 : currentStep.speed),
     hr_bpm:      currentHR || 0,
-    incline_pct: currentStep.incline,
+    incline_pct: getDisplayedIncline() ?? (awaitingWorkoutStop ? 0 : currentStep.incline),
   });
 
-  const step = activeSteps[activeStepIdx];
+  if (awaitingWorkoutStop) {
+    updateActiveUI();
+    return;
+  }
+
+  stepElapsed++;
 
   // Advance step?
-  if (stepElapsed >= step.duration) {
-    activeStepIdx++;
-    stepElapsed = 0;
-    if (activeStepIdx >= activeSteps.length) {
-      // Workout complete
-      clearInterval(timerHandle);
-      timerHandle = null;
-      btStop().catch(() => {});
-      showWorkoutDone();
-      return;
-    }
-    applyStep(activeStepIdx);
+  if (stepElapsed >= currentStep.duration) {
+    advanceToStep(activeStepIdx + 1);
+    return;
   }
 
   updateActiveUI();
 }
 
-async function applyStep(idx) {
-  const step = activeSteps[idx];
-  // FTMS control point allows only one write at a time — must await each command.
-  await btStartResume().catch(() => {});
+async function applyCurrentStepTarget() {
+  const step = getActiveStep();
+  if (!step) return;
+  currentTreadmillSpeed = step.speed;
+  currentTreadmillIncline = step.incline;
   await btSetSpeed(step.speed).catch(() => {});
   await btSetIncline(step.incline).catch(() => {});
   updateActiveUI();
 }
 
-function updateActiveUI() {
-  const step = activeSteps[activeStepIdx];
-  const remaining = step.duration - stepElapsed;
+async function startCurrentSegment() {
+  const step = getActiveStep();
+  if (!step) return;
 
-  // Speed / incline
-  document.getElementById('active-speed').textContent = step.speed.toFixed(1);
-  document.getElementById('active-incline').textContent = step.incline;
+  await btStartResume().catch(() => {});
+  await applyCurrentStepTarget().catch(() => {});
+}
+
+async function startCooldownMode() {
+  awaitingWorkoutStop = true;
+  workoutActive = false;
+  paused = false;
+  zeroSpeedStreak = 0;
+  currentTreadmillSpeed = 1.0;
+  currentTreadmillIncline = 0;
+
+  await btSetSpeed(1.0).catch(() => {});
+  await btSetIncline(0).catch(() => {});
+  updateActiveControlState();
+  updateActiveUI();
+}
+
+function advanceToStep(nextIdx) {
+  activeStepIdx = nextIdx;
+  stepElapsed = 0;
+
+  if (activeStepIdx >= activeSteps.length) {
+    activeStepIdx = Math.max(0, activeSteps.length - 1);
+    stepElapsed = getActiveStep()?.duration || 0;
+    startCooldownMode().catch(() => {});
+    return;
+  }
+
+  applyCurrentStepTarget().catch(() => {});
+  updateActiveUI();
+}
+
+function finalizeWorkout(origin, sendStopCommand) {
+  if (workoutFinishing || (!workoutActive && !awaitingWorkoutStop && workoutSamples.length === 0)) return;
+
+  workoutFinishing = true;
+  workoutActive = false;
+  awaitingWorkoutStop = false;
+  paused = false;
+  clearInterval(timerHandle);
+  timerHandle = null;
+  updateActiveControlState();
+
+  if (sendStopCommand) {
+    btStop().catch(() => {});
+  }
+
+  showWorkoutDone();
+
+  const wantsUpload = window.confirm(
+    origin === 'treadmill'
+      ? 'Workout stopped on the treadmill. Upload it to Strava?'
+      : 'Workout stopped. Upload it to Strava?'
+  );
+
+  if (wantsUpload) {
+    setTimeout(() => App.uploadToStrava(), 0);
+  }
+
+  resetWorkoutRuntimeState();
+}
+
+function updateActiveUI() {
+  const step = getActiveStep();
+  if (!step) return;
+  const remaining = Math.max(0, step.duration - stepElapsed);
+  const displayedSpeed = getDisplayedSpeed();
+  const displayedIncline = getDisplayedIncline();
+  const CIRCUMFERENCE = 327;
+
+  // Actual speed / incline from treadmill notifications when available.
+  document.getElementById('active-speed').textContent =
+    displayedSpeed != null ? displayedSpeed.toFixed(1) : step.speed.toFixed(1);
+  document.getElementById('active-incline').textContent =
+    displayedIncline != null ? displayedIncline.toFixed(1) : step.incline.toFixed(1);
+
+  if (awaitingWorkoutStop) {
+    document.getElementById('active-seg-time').textContent = 'done';
+    document.getElementById('timer-ring-fg').style.strokeDashoffset = CIRCUMFERENCE;
+    document.getElementById('active-seg-label').textContent = 'Workout complete';
+    document.getElementById('active-next').textContent =
+      'Cooldown mode: adjust speed or incline if you want to keep going, then stop on the app or treadmill when finished.';
+    document.getElementById('progress-bar').style.width = '100%';
+    document.getElementById('progress-label').textContent =
+      `Plan done · total ${fmtMMSS(totalElapsed)}`;
+    updateActiveControlState();
+    return;
+  }
 
   // Countdown
   document.getElementById('active-seg-time').textContent = fmtMMSS(remaining);
 
   // Ring progress (0 = full, 327 = empty)
-  const CIRCUMFERENCE = 327;
   const fraction = remaining / step.duration;
   document.getElementById('timer-ring-fg').style.strokeDashoffset =
     CIRCUMFERENCE * (1 - fraction);
 
-  // Segment label
-  const inclineStr = step.incline > 0 ? ` · ${step.incline}% incline` : '';
+  // Segment label + current segment targets
+  const inclineStr = step.incline > 0 ? ` · target ${step.incline.toFixed(1)}%` : '';
   document.getElementById('active-seg-label').textContent =
-    `Segment ${activeStepIdx + 1} of ${activeSteps.length}${inclineStr}`;
+    `Segment ${activeStepIdx + 1} of ${activeSteps.length} · target ${step.speed.toFixed(1)} km/h${inclineStr}`;
 
   // Next segment
   const next = activeSteps[activeStepIdx + 1];
   document.getElementById('active-next').textContent = next
-    ? `Next: ${next.speed} km/h${next.incline > 0 ? ` · ${next.incline}%` : ''} for ${fmtDur(next.duration)}`
+    ? `Next: ${next.speed.toFixed(1)} km/h${next.incline > 0 ? ` · ${next.incline.toFixed(1)}%` : ''} for ${fmtDur(next.duration)}`
     : 'Last segment';
 
-  // Overall progress
-  const pct = Math.min(100, (totalElapsed / totalDuration) * 100);
+  // Overall plan progress
+  const pct = Math.min(100, (getPlannedProgressSeconds() / totalDuration) * 100);
   document.getElementById('progress-bar').style.width = pct + '%';
   document.getElementById('progress-label').textContent =
-    `${fmtMMSS(totalElapsed)} / ${fmtMMSS(totalDuration)}`;
+    `${fmtMMSS(getPlannedProgressSeconds())} / ${fmtMMSS(totalDuration)}`;
+  updateActiveControlState();
 }
 
 function showWorkoutDone() {

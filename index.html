@@ -62,15 +62,32 @@
       <div class="active-metric-row">
         <div class="active-metric">
           <div class="metric-value" id="active-speed">–</div>
-          <div class="metric-label">km/h</div>
+          <div class="metric-label">km/h actual</div>
         </div>
         <div class="active-metric">
           <div class="metric-value" id="active-incline">–</div>
-          <div class="metric-label">% incline</div>
+          <div class="metric-label">% actual</div>
         </div>
         <div class="active-metric" id="hr-metric">
           <div class="metric-value hr-value" id="active-hr">–</div>
           <div class="metric-label">&#9829; bpm</div>
+        </div>
+      </div>
+
+      <div class="active-adjust-grid">
+        <div class="adjust-card">
+          <div class="adjust-title">Speed</div>
+          <div class="adjust-buttons">
+            <button class="btn-adjust" onclick="App.adjustSpeed(-0.1)">-0.1</button>
+            <button class="btn-adjust" onclick="App.adjustSpeed(0.1)">+0.1</button>
+          </div>
+        </div>
+        <div class="adjust-card">
+          <div class="adjust-title">Incline</div>
+          <div class="adjust-buttons">
+            <button class="btn-adjust" onclick="App.adjustIncline(-0.5)">-0.5</button>
+            <button class="btn-adjust" onclick="App.adjustIncline(0.5)">+0.5</button>
+          </div>
         </div>
       </div>
 
@@ -99,7 +116,8 @@
 
     <div class="active-controls">
       <button id="btn-pause" class="btn-secondary" onclick="App.togglePause()">Pause</button>
-      <button class="btn-danger" onclick="App.stopWorkout()">Stop</button>
+      <button id="btn-skip" class="btn-secondary" onclick="App.skipSegment()">Next Segment</button>
+      <button id="btn-stop-active" class="btn-danger" onclick="App.stopWorkout()">Stop</button>
     </div>
   </div>
 

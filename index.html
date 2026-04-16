@@ -26,6 +26,12 @@
           </svg>
           <span id="connect-hr-label">Polar H10</span>
         </button>
+        <button id="btn-strava" class="btn-icon" title="Strava settings" onclick="App.openSettings()">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/>
+          </svg>
+          <span id="strava-label">Strava</span>
+        </button>
       </div>
     </header>
     <div id="connect-status" class="connect-status hidden"></div>
@@ -94,6 +100,54 @@
     <div class="active-controls">
       <button id="btn-pause" class="btn-secondary" onclick="App.togglePause()">Pause</button>
       <button class="btn-danger" onclick="App.stopWorkout()">Stop</button>
+    </div>
+  </div>
+
+  <!-- Summary View -->
+  <div id="view-summary" class="view">
+    <div class="summary-top">
+      <div class="summary-check">&#10003;</div>
+      <div id="summary-title" class="summary-title"></div>
+      <div id="summary-date" class="summary-date"></div>
+    </div>
+
+    <div id="summary-stats" class="summary-stats"></div>
+
+    <div class="summary-actions">
+      <button id="btn-upload" class="btn-strava" onclick="App.uploadToStrava()">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+          <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/>
+        </svg>
+        Upload to Strava
+      </button>
+      <div id="upload-status" class="upload-status hidden"></div>
+      <button class="btn-secondary" onclick="App.showPlan()">Done</button>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settings-overlay" class="modal-overlay hidden" onclick="App.closeSettings()"></div>
+  <div id="settings-modal" class="modal-sheet hidden">
+    <div class="modal-handle"></div>
+    <h2 class="modal-title">Strava Integration</h2>
+
+    <div id="strava-connected-info" class="strava-info hidden">
+      <div class="strava-athlete" id="strava-athlete-name"></div>
+      <button class="btn-disconnect" onclick="App.stravaDisconnect()">Disconnect</button>
+    </div>
+
+    <div id="strava-setup" class="strava-setup">
+      <p class="settings-hint">
+        Go to <strong>strava.com/settings/api</strong>, create an app, set the redirect URI to:<br>
+        <code id="redirect-uri-hint"></code>
+      </p>
+      <label class="settings-label">Client ID
+        <input id="input-client-id" class="settings-input" type="text" placeholder="12345" inputmode="numeric">
+      </label>
+      <label class="settings-label">Client Secret
+        <input id="input-client-secret" class="settings-input" type="password" placeholder="••••••••••••••••">
+      </label>
+      <button class="btn-primary" onclick="App.stravaAuth()">Connect Strava</button>
     </div>
   </div>
 

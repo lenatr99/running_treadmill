@@ -288,12 +288,21 @@ let totalDuration = 0;
 let paused = false;
 let timerHandle = null;
 
+// Workout recording
+let workoutSamples = [];   // [{speed_kmh, hr_bpm, incline_pct}] one per second
+let workoutStartTime = null;
+let workoutName = '';
+
 // ─────────────────────────────────────────────────────────
 //  App object (public API for inline handlers)
 // ─────────────────────────────────────────────────────────
 const App = {
 
   async init() {
+    // Handle Strava OAuth callback before rendering anything else
+    await handleStravaCallback();
+    updateStravaButtonState();
+
     try {
       plan = await loadPlan();
       renderPlanList();
@@ -357,12 +366,15 @@ const App = {
   startWorkout() {
     if (!selectedWorkout || selectedWorkout.steps.length === 0) return;
 
-    activeSteps    = selectedWorkout.steps;
-    activeStepIdx  = 0;
-    stepElapsed    = 0;
-    totalElapsed   = 0;
-    totalDuration  = activeSteps.reduce((s, x) => s + x.duration, 0);
-    paused         = false;
+    activeSteps      = selectedWorkout.steps;
+    activeStepIdx    = 0;
+    stepElapsed      = 0;
+    totalElapsed     = 0;
+    totalDuration    = activeSteps.reduce((s, x) => s + x.duration, 0);
+    paused           = false;
+    workoutSamples   = [];
+    workoutStartTime = new Date();
+    workoutName      = selectedWorkout.goal;
 
     document.getElementById('active-title').textContent = selectedWorkout.goal;
     document.getElementById('btn-pause').textContent = 'Pause';
@@ -398,6 +410,14 @@ function tick() {
 
   stepElapsed++;
   totalElapsed++;
+
+  // Record sample for this second
+  const currentStep = activeSteps[activeStepIdx];
+  workoutSamples.push({
+    speed_kmh:   currentStep.speed,
+    hr_bpm:      currentHR || 0,
+    incline_pct: currentStep.incline,
+  });
 
   const step = activeSteps[activeStepIdx];
 
@@ -464,14 +484,7 @@ function updateActiveUI() {
 }
 
 function showWorkoutDone() {
-  // Simple done state — replace active-main content
-  document.getElementById('active-speed').textContent = '✓';
-  document.getElementById('active-incline').textContent = '–';
-  document.getElementById('active-seg-time').textContent = '0:00';
-  document.getElementById('active-seg-label').textContent = 'Workout complete!';
-  document.getElementById('active-next').textContent = '';
-  document.getElementById('progress-bar').style.width = '100%';
-  document.getElementById('btn-pause').disabled = true;
+  showSummary();
 }
 
 // ─────────────────────────────────────────────────────────
@@ -530,6 +543,325 @@ function renderPlanList() {
     }
     container.appendChild(card);
   }
+}
+
+// ─────────────────────────────────────────────────────────
+//  Workout summary + stats
+// ─────────────────────────────────────────────────────────
+function computeStats() {
+  let distanceM = 0, totalHR = 0, hrCount = 0, maxHR = 0, maxSpeedMs = 0;
+  for (const s of workoutSamples) {
+    const speedMs = s.speed_kmh / 3.6;
+    distanceM += speedMs;
+    maxSpeedMs = Math.max(maxSpeedMs, speedMs);
+    if (s.hr_bpm > 0) { totalHR += s.hr_bpm; hrCount++; maxHR = Math.max(maxHR, s.hr_bpm); }
+  }
+  const durationSec = workoutSamples.length;
+  const avgHR = hrCount ? Math.round(totalHR / hrCount) : 0;
+  const avgPaceSec = distanceM > 0 ? (durationSec / (distanceM / 1000)) : 0;
+  return { distanceM, durationSec, avgHR, maxHR, maxSpeedMs, avgPaceSec };
+}
+
+function fmtPace(secPerKm) {
+  if (!secPerKm) return '–';
+  const m = Math.floor(secPerKm / 60);
+  const s = Math.round(secPerKm % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function showSummary() {
+  const stats = computeStats();
+  document.getElementById('summary-title').textContent = workoutName;
+  document.getElementById('summary-date').textContent =
+    workoutStartTime.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+  const grid = document.getElementById('summary-stats');
+  const cards = [
+    { label: 'Distance',  value: (stats.distanceM / 1000).toFixed(2) + ' km', cls: '' },
+    { label: 'Time',      value: fmtMMSS(stats.durationSec),                  cls: '' },
+    { label: 'Avg Pace',  value: fmtPace(stats.avgPaceSec) + ' /km',          cls: '' },
+    { label: 'Avg HR',    value: stats.avgHR ? stats.avgHR + ' bpm' : '–',    cls: 'hr' },
+    { label: 'Max HR',    value: stats.maxHR ? stats.maxHR + ' bpm' : '–',    cls: 'hr' },
+    { label: 'Max Speed', value: stats.maxSpeedMs ? (stats.maxSpeedMs * 3.6).toFixed(1) + ' km/h' : '–', cls: '' },
+  ];
+  grid.innerHTML = cards.map(c =>
+    `<div class="stat-card ${c.cls}">
+      <div class="stat-value">${c.value}</div>
+      <div class="stat-label">${c.label}</div>
+    </div>`
+  ).join('');
+
+  // Show upload button only if we have samples
+  document.getElementById('btn-upload').disabled = workoutSamples.length === 0;
+  document.getElementById('upload-status').className = 'upload-status hidden';
+
+  showView('summary');
+}
+
+// ─────────────────────────────────────────────────────────
+//  TCX generation
+// ─────────────────────────────────────────────────────────
+function generateTCX() {
+  let distanceM = 0;
+  const trackpoints = workoutSamples.map((s, i) => {
+    const t = new Date(workoutStartTime.getTime() + i * 1000);
+    const speedMs = s.speed_kmh / 3.6;
+    distanceM += speedMs;
+    const hrTag = s.hr_bpm > 0
+      ? `<HeartRateBpm><Value>${s.hr_bpm}</Value></HeartRateBpm>`
+      : '';
+    return `          <Trackpoint>
+            <Time>${t.toISOString()}</Time>
+            <DistanceMeters>${distanceM.toFixed(2)}</DistanceMeters>
+            ${hrTag}
+            <Extensions>
+              <ns3:TPX>
+                <ns3:Speed>${speedMs.toFixed(4)}</ns3:Speed>
+              </ns3:TPX>
+            </Extensions>
+          </Trackpoint>`;
+  });
+
+  const stats = computeStats();
+  const avgHRTag = stats.avgHR
+    ? `<AverageHeartRateBpm><Value>${stats.avgHR}</Value></AverageHeartRateBpm>` : '';
+  const maxHRTag = stats.maxHR
+    ? `<MaximumHeartRateBpm><Value>${stats.maxHR}</Value></MaximumHeartRateBpm>` : '';
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<TrainingCenterDatabase
+  xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"
+  xmlns:ns3="http://www.garmin.com/xmlschemas/ActivityExtension/v2"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Activities>
+    <Activity Sport="Running">
+      <Id>${workoutStartTime.toISOString()}</Id>
+      <Lap StartTime="${workoutStartTime.toISOString()}">
+        <TotalTimeSeconds>${stats.durationSec}</TotalTimeSeconds>
+        <DistanceMeters>${stats.distanceM.toFixed(2)}</DistanceMeters>
+        <MaximumSpeed>${stats.maxSpeedMs.toFixed(4)}</MaximumSpeed>
+        ${avgHRTag}
+        ${maxHRTag}
+        <Intensity>Active</Intensity>
+        <TriggerMethod>Manual</TriggerMethod>
+        <Track>
+${trackpoints.join('\n')}
+        </Track>
+      </Lap>
+    </Activity>
+  </Activities>
+</TrainingCenterDatabase>`;
+}
+
+// ─────────────────────────────────────────────────────────
+//  Strava OAuth2
+// ─────────────────────────────────────────────────────────
+function stravaRedirectUri() {
+  return window.location.origin + window.location.pathname;
+}
+
+async function handleStravaCallback() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  if (!code) return;
+
+  // Clean the URL immediately so a refresh doesn't re-trigger this
+  window.history.replaceState({}, document.title, window.location.pathname);
+
+  const clientId     = localStorage.getItem('stravaClientId');
+  const clientSecret = localStorage.getItem('stravaClientSecret');
+  if (!clientId || !clientSecret) return;
+
+  setUploadStatus('Connecting to Strava…', '');
+  try {
+    const resp = await fetch('https://www.strava.com/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+        grant_type: 'authorization_code',
+      }),
+    });
+    const data = await resp.json();
+    if (!data.access_token) throw new Error(data.message || 'Token exchange failed');
+
+    localStorage.setItem('stravaAccessToken',  data.access_token);
+    localStorage.setItem('stravaRefreshToken', data.refresh_token);
+    localStorage.setItem('stravaTokenExpiry',  data.expires_at);
+    localStorage.setItem('stravaAthleteName',
+      `${data.athlete?.firstname || ''} ${data.athlete?.lastname || ''}`.trim() || 'Athlete');
+
+    updateStravaButtonState();
+  } catch (e) {
+    console.error('Strava token exchange failed', e);
+  }
+}
+
+async function getValidStravaToken() {
+  const expiry = parseInt(localStorage.getItem('stravaTokenExpiry') || '0');
+  const now = Math.floor(Date.now() / 1000);
+
+  if (expiry - now > 60) {
+    return localStorage.getItem('stravaAccessToken');
+  }
+
+  // Refresh
+  const clientId     = localStorage.getItem('stravaClientId');
+  const clientSecret = localStorage.getItem('stravaClientSecret');
+  const refreshToken = localStorage.getItem('stravaRefreshToken');
+  if (!clientId || !clientSecret || !refreshToken) return null;
+
+  const resp = await fetch('https://www.strava.com/oauth/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    }),
+  });
+  const data = await resp.json();
+  if (!data.access_token) return null;
+
+  localStorage.setItem('stravaAccessToken',  data.access_token);
+  localStorage.setItem('stravaRefreshToken', data.refresh_token);
+  localStorage.setItem('stravaTokenExpiry',  data.expires_at);
+  return data.access_token;
+}
+
+function updateStravaButtonState() {
+  const name = localStorage.getItem('stravaAthleteName');
+  const btn  = document.getElementById('btn-strava');
+  const lbl  = document.getElementById('strava-label');
+  if (name) {
+    btn.classList.add('connected');
+    lbl.textContent = name.split(' ')[0]; // first name only
+  } else {
+    btn.classList.remove('connected');
+    lbl.textContent = 'Strava';
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+//  Strava upload
+// ─────────────────────────────────────────────────────────
+Object.assign(App, {
+  async uploadToStrava() {
+    const btn = document.getElementById('btn-upload');
+    btn.disabled = true;
+    setUploadStatus('Uploading…', '');
+
+    try {
+      const token = await getValidStravaToken();
+      if (!token) {
+        setUploadStatus('Not connected to Strava — tap the Strava button to connect', 'err');
+        btn.disabled = false;
+        return;
+      }
+
+      const tcx  = generateTCX();
+      const blob = new Blob([tcx], { type: 'application/tcx+xml' });
+      const form = new FormData();
+      form.append('file', blob, 'workout.tcx');
+      form.append('name',       workoutName);
+      form.append('sport_type', 'VirtualRun');
+      form.append('trainer',    '1');
+      form.append('data_type',  'tcx');
+
+      const uploadResp = await fetch('https://www.strava.com/api/v3/uploads', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+
+      if (!uploadResp.ok) {
+        const err = await uploadResp.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${uploadResp.status}`);
+      }
+
+      const upload = await uploadResp.json();
+
+      // Poll until Strava finishes processing
+      setUploadStatus('Processing…', '');
+      const activityId = await pollUpload(token, upload.id);
+      setUploadStatus(`Uploaded! View on Strava (activity ${activityId})`, 'ok');
+
+    } catch (e) {
+      setUploadStatus(`Upload failed: ${e.message}`, 'err');
+      btn.disabled = false;
+    }
+  },
+
+  openSettings() {
+    document.getElementById('redirect-uri-hint').textContent = stravaRedirectUri();
+    // Pre-fill saved values
+    document.getElementById('input-client-id').value     = localStorage.getItem('stravaClientId') || '';
+    document.getElementById('input-client-secret').value = '';  // never pre-fill secrets
+
+    const name = localStorage.getItem('stravaAthleteName');
+    if (name) {
+      document.getElementById('strava-athlete-name').textContent = `Connected as ${name}`;
+      document.getElementById('strava-connected-info').classList.remove('hidden');
+      document.getElementById('strava-setup').classList.add('hidden');
+    } else {
+      document.getElementById('strava-connected-info').classList.add('hidden');
+      document.getElementById('strava-setup').classList.remove('hidden');
+    }
+
+    document.getElementById('settings-overlay').classList.remove('hidden');
+    document.getElementById('settings-modal').classList.remove('hidden');
+  },
+
+  closeSettings() {
+    document.getElementById('settings-overlay').classList.add('hidden');
+    document.getElementById('settings-modal').classList.add('hidden');
+  },
+
+  stravaAuth() {
+    const clientId     = document.getElementById('input-client-id').value.trim();
+    const clientSecret = document.getElementById('input-client-secret').value.trim();
+    if (!clientId || !clientSecret) {
+      alert('Enter both Client ID and Client Secret first.');
+      return;
+    }
+    localStorage.setItem('stravaClientId',     clientId);
+    localStorage.setItem('stravaClientSecret', clientSecret);
+
+    const redirect = encodeURIComponent(stravaRedirectUri());
+    window.location.href =
+      `https://www.strava.com/oauth/authorize?client_id=${clientId}` +
+      `&response_type=code&redirect_uri=${redirect}` +
+      `&approval_prompt=auto&scope=activity:write`;
+  },
+
+  stravaDisconnect() {
+    ['stravaAccessToken','stravaRefreshToken','stravaTokenExpiry','stravaAthleteName']
+      .forEach(k => localStorage.removeItem(k));
+    updateStravaButtonState();
+    App.closeSettings();
+  },
+});
+
+async function pollUpload(token, uploadId, attempts = 0) {
+  if (attempts > 15) throw new Error('Timed out waiting for Strava to process upload');
+  await new Promise(r => setTimeout(r, 2000));
+  const resp = await fetch(`https://www.strava.com/api/v3/uploads/${uploadId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await resp.json();
+  if (data.error)     throw new Error(data.error);
+  if (data.activity_id) return data.activity_id;
+  return pollUpload(token, uploadId, attempts + 1);
+}
+
+function setUploadStatus(msg, cls) {
+  const el = document.getElementById('upload-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'upload-status' + (cls ? ` ${cls}` : '');
 }
 
 // ─────────────────────────────────────────────────────────

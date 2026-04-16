@@ -106,7 +106,7 @@ function fmtMMSS(seconds) {
 //  CSV loader
 // ─────────────────────────────────────────────────────────
 async function loadPlan() {
-  const res = await fetch('../plan_next_30_days.csv');
+  const res = await fetch('plan_next_30_days.csv');
   if (!res.ok) throw new Error('Could not load plan_next_30_days.csv');
   const text = await res.text();
   const lines = text.trim().split('\n');

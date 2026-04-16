@@ -141,6 +141,8 @@ let btTreadmillData = null;
 let btCommandChain = Promise.resolve();
 let currentTreadmillSpeed = null;
 let currentTreadmillIncline = null;
+let startupTargetInterval = null;
+let startupTargetTimeout = null;
 
 async function btConnect() {
   setConnectStatus('Scanning…', '');
@@ -256,7 +258,7 @@ function onTreadmillData(event) {
     if (hasSeenWorkoutMotion && (currentTreadmillSpeed ?? 0) <= 0.1) {
       zeroSpeedStreak++;
       if (zeroSpeedStreak >= 2) {
-        finalizeWorkout('treadmill', false);
+        finalizeWorkout('treadmill', false).catch(() => {});
         return;
       }
     } else {
@@ -384,7 +386,35 @@ function getPlannedProgressSeconds() {
   return seconds;
 }
 
+function stopStartupTargetReinforcement() {
+  clearInterval(startupTargetInterval);
+  clearTimeout(startupTargetTimeout);
+  startupTargetInterval = null;
+  startupTargetTimeout = null;
+}
+
+function startStartupTargetReinforcement() {
+  stopStartupTargetReinforcement();
+
+  const resendTarget = async () => {
+    if (!workoutActive || awaitingWorkoutStop || paused || workoutFinishing || activeStepIdx !== 0) return;
+    const step = getActiveStep();
+    if (!step) return;
+
+    await applyCurrentStepTarget().catch(() => {});
+  };
+
+  startupTargetInterval = setInterval(() => {
+    resendTarget().catch(() => {});
+  }, 1000);
+
+  startupTargetTimeout = setTimeout(() => {
+    stopStartupTargetReinforcement();
+  }, 6000);
+}
+
 function resetWorkoutRuntimeState() {
+  stopStartupTargetReinforcement();
   activeSteps = [];
   activeStepIdx = 0;
   stepElapsed = 0;
@@ -521,15 +551,19 @@ const App = {
     paused = !paused;
     updateActiveControlState();
     if (paused) {
+      stopStartupTargetReinforcement();
       writeCP(new Uint8Array([CP.STOP_PAUSE, 0x02])).catch(() => {});
     } else {
       btStartResume().catch(() => {});
       applyCurrentStepTarget().catch(() => {});
+      if (activeStepIdx === 0) {
+        startStartupTargetReinforcement();
+      }
     }
   },
 
-  stopWorkout() {
-    finalizeWorkout('app', true);
+  async stopWorkout() {
+    await finalizeWorkout('app', true);
   },
 
   async adjustSpeed(delta) {
@@ -607,9 +641,11 @@ async function startCurrentSegment() {
 
   await btStartResume().catch(() => {});
   await applyCurrentStepTarget().catch(() => {});
+  startStartupTargetReinforcement();
 }
 
 async function startCooldownMode() {
+  stopStartupTargetReinforcement();
   awaitingWorkoutStop = true;
   workoutActive = false;
   paused = false;
@@ -624,6 +660,7 @@ async function startCooldownMode() {
 }
 
 function advanceToStep(nextIdx) {
+  stopStartupTargetReinforcement();
   activeStepIdx = nextIdx;
   stepElapsed = 0;
 
@@ -638,7 +675,7 @@ function advanceToStep(nextIdx) {
   updateActiveUI();
 }
 
-function finalizeWorkout(origin, sendStopCommand) {
+async function finalizeWorkout(origin, sendStopCommand) {
   if (workoutFinishing || (!workoutActive && !awaitingWorkoutStop && workoutSamples.length === 0)) return;
 
   workoutFinishing = true;
@@ -647,10 +684,14 @@ function finalizeWorkout(origin, sendStopCommand) {
   paused = false;
   clearInterval(timerHandle);
   timerHandle = null;
+  stopStartupTargetReinforcement();
   updateActiveControlState();
 
   if (sendStopCommand) {
-    btStop().catch(() => {});
+    currentTreadmillSpeed = 0;
+    currentTreadmillIncline = 0;
+    updateActiveUI();
+    await btStop().catch(() => {});
   }
 
   showWorkoutDone();

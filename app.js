@@ -106,6 +106,96 @@ function fmtMMSS(seconds) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+/** Effort score for coloring (speed dominates; incline adds difficulty). */
+function stepEffortScore(step) {
+  return step.speed + step.incline * 0.4;
+}
+
+/** Map effort relative to this workout to a fill color (cool = easier, warm = harder). */
+function effortFillColor(score, minScore, maxScore) {
+  const t = maxScore > minScore ? (score - minScore) / (maxScore - minScore) : 0.5;
+  const hue = 128 * (1 - Math.min(1, Math.max(0, t)));
+  const sat = 58 + t * 12;
+  const light = 38 + t * 10;
+  return `hsl(${hue.toFixed(0)} ${sat.toFixed(0)}% ${light.toFixed(0)}%)`;
+}
+
+/** Build SVG profile: time → width, bar height → speed, color → effort within workout. */
+function renderDetailWorkoutChart(steps) {
+  const wrap = document.getElementById('detail-chart-wrap');
+  if (!wrap) return;
+  if (!steps || steps.length === 0) {
+    wrap.innerHTML = '';
+    wrap.classList.add('hidden');
+    return;
+  }
+
+  const totalSec = steps.reduce((s, x) => s + x.duration, 0);
+  if (totalSec <= 0) {
+    wrap.innerHTML = '';
+    wrap.classList.add('hidden');
+    return;
+  }
+
+  const scores = steps.map(stepEffortScore);
+  const minScore = Math.min(...scores);
+  const maxScore = Math.max(...scores);
+  const maxSpeed = Math.max(...steps.map(s => s.speed), 0.1);
+
+  const W = 360;
+  const H = 112;
+  const padL = 34;
+  const padR = 10;
+  const padT = 6;
+  const padB = 20;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+
+  const parts = [];
+  let cum = 0;
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    const x0 = padL + (cum / totalSec) * chartW;
+    const segW = Math.max(0.8, (step.duration / totalSec) * chartW);
+    const barH = (step.speed / maxSpeed) * chartH;
+    const y = padT + chartH - barH;
+    const fill = effortFillColor(stepEffortScore(step), minScore, maxScore);
+    const label = `${step.speed} km/h${step.incline > 0 ? ` · ${step.incline}%` : ''} · ${fmtDur(step.duration)}`;
+    parts.push(
+      `<rect x="${x0.toFixed(2)}" y="${y.toFixed(2)}" width="${segW.toFixed(2)}" height="${barH.toFixed(2)}" fill="${fill}" rx="1.5"><title>${label}</title></rect>`
+    );
+    cum += step.duration;
+  }
+
+  const totalMin = totalSec / 60;
+  const midMin = totalMin / 2;
+  const y0 = padT + chartH;
+  const tickYs = [0, 0.5, 1].map(f => padT + chartH * (1 - f));
+  const speedLabels = [0, maxSpeed / 2, maxSpeed].map(s => s.toFixed(1));
+
+  const svg = `
+<svg class="detail-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+  <text x="${padL - 4}" y="${padT + 9}" text-anchor="end" fill="#888" font-size="9" font-family="system-ui,sans-serif">${maxSpeed.toFixed(1)}</text>
+  <text x="${padL - 4}" y="${padT + chartH / 2 + 3}" text-anchor="end" fill="#888" font-size="9" font-family="system-ui,sans-serif">${(maxSpeed / 2).toFixed(1)}</text>
+  <text x="${padL - 4}" y="${y0 + 3}" text-anchor="end" fill="#888" font-size="9" font-family="system-ui,sans-serif">0</text>
+  <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${y0}" stroke="#3a3a3a" stroke-width="1"/>
+  <line x1="${padL}" y1="${y0}" x2="${padL + chartW}" y2="${y0}" stroke="#3a3a3a" stroke-width="1"/>
+  ${parts.join('')}
+  <text x="${padL}" y="${H - 4}" fill="#888" font-size="9" font-family="system-ui,sans-serif">0</text>
+  <text x="${padL + chartW / 2}" y="${H - 4}" text-anchor="middle" fill="#888" font-size="9" font-family="system-ui,sans-serif">${midMin < 10 ? midMin.toFixed(1) : midMin.toFixed(0)} min</text>
+  <text x="${padL + chartW}" y="${H - 4}" text-anchor="end" fill="#888" font-size="9" font-family="system-ui,sans-serif">${totalMin < 10 ? totalMin.toFixed(1) : totalMin.toFixed(0)} min</text>
+</svg>
+<div class="detail-chart-legend">
+  <span><i style="background:hsl(128 58% 38%)"></i> Easier</span>
+  <span><i style="background:hsl(64 64% 43%)"></i> Moderate</span>
+  <span><i style="background:hsl(0 70% 48%)"></i> Harder</span>
+  <span style="margin-left:auto">Height = speed (km/h)</span>
+</div>`;
+
+  wrap.innerHTML = `<div class="detail-chart-title">Workout profile</div>${svg}`;
+  wrap.classList.remove('hidden');
+}
+
 // ─────────────────────────────────────────────────────────
 //  CSV loader
 // ─────────────────────────────────────────────────────────
@@ -548,6 +638,8 @@ const App = {
         <span class="seg-dur">${fmtMMSS(step.duration)}</span>`;
       list.appendChild(row);
     });
+
+    renderDetailWorkoutChart(w.steps);
 
     document.getElementById('btn-start').disabled = w.steps.length === 0;
     showView('detail');

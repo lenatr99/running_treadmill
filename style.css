@@ -169,6 +169,54 @@ header h1 {
   border-bottom: 1px solid var(--bg3);
 }
 
+.detail-chart-wrap {
+  padding: 12px 16px 4px;
+  border-bottom: 1px solid var(--bg3);
+  background: var(--bg);
+}
+
+.detail-chart-wrap.hidden {
+  display: none;
+}
+
+.detail-chart-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text2);
+  margin-bottom: 8px;
+}
+
+.detail-chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 200px;
+}
+
+.detail-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--text2);
+}
+
+.detail-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detail-chart-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
 .segment-list {
   flex: 1;
   overflow-y: auto;

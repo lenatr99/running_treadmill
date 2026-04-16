@@ -439,12 +439,12 @@ function tick() {
   updateActiveUI();
 }
 
-function applyStep(idx) {
+async function applyStep(idx) {
   const step = activeSteps[idx];
-  // Send BT commands (fire and forget — UI always updates regardless)
-  btStartResume().catch(() => {});
-  btSetSpeed(step.speed).catch(() => {});
-  btSetIncline(step.incline).catch(() => {});
+  // FTMS control point allows only one write at a time — must await each command.
+  await btStartResume().catch(() => {});
+  await btSetSpeed(step.speed).catch(() => {});
+  await btSetIncline(step.incline).catch(() => {});
   updateActiveUI();
 }
 

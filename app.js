@@ -108,19 +108,67 @@ function fmtMMSS(seconds) {
 
 /** Effort score for coloring (speed dominates; incline adds difficulty). */
 function stepEffortScore(step) {
-  return step.speed + step.incline * 0.4;
+  return step.speed + step.incline * 0.35;
 }
 
-/** Map effort relative to this workout to a fill color (cool = easier, warm = harder). */
-function effortFillColor(score, minScore, maxScore) {
-  const t = maxScore > minScore ? (score - minScore) / (maxScore - minScore) : 0.5;
-  const hue = 128 * (1 - Math.min(1, Math.max(0, t)));
-  const sat = 58 + t * 12;
-  const light = 38 + t * 10;
+/** Use an absolute effort scale so recovery blocks stay visually easy across workouts. */
+function effortFillColor(step) {
+  const score = stepEffortScore(step);
+  const t = Math.min(1, Math.max(0, (score - 6.5) / 8));
+  const eased = Math.pow(t, 1.08);
+  const hue = 165 - eased * 165;
+  const sat = 70 + eased * 12;
+  const light = 54 - eased * 8;
   return `hsl(${hue.toFixed(0)} ${sat.toFixed(0)}% ${light.toFixed(0)}%)`;
 }
 
-/** Build SVG profile: time → width, bar height → speed, color → effort within workout. */
+function fmtChartSpeed(speed) {
+  return Number.isInteger(speed) ? String(speed) : speed.toFixed(1);
+}
+
+function buildStepAreaPath(points, baselineY) {
+  if (!points.length) return '';
+
+  const path = [
+    `M ${points[0].x0.toFixed(2)} ${baselineY.toFixed(2)}`,
+    `L ${points[0].x0.toFixed(2)} ${points[0].y.toFixed(2)}`,
+    `L ${points[0].x1.toFixed(2)} ${points[0].y.toFixed(2)}`
+  ];
+
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    path.push(`L ${curr.x0.toFixed(2)} ${prev.y.toFixed(2)}`);
+    path.push(`L ${curr.x0.toFixed(2)} ${curr.y.toFixed(2)}`);
+    path.push(`L ${curr.x1.toFixed(2)} ${curr.y.toFixed(2)}`);
+  }
+
+  const last = points[points.length - 1];
+  path.push(`L ${last.x1.toFixed(2)} ${baselineY.toFixed(2)}`);
+  path.push('Z');
+  return path.join(' ');
+}
+
+function buildStepOutlinePath(points) {
+  if (!points.length) return '';
+
+  const path = [
+    `M ${points[0].x0.toFixed(2)} ${points[0].y.toFixed(2)}`,
+    `L ${points[0].x1.toFixed(2)} ${points[0].y.toFixed(2)}`
+  ];
+
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    path.push(`L ${curr.x0.toFixed(2)} ${prev.y.toFixed(2)}`);
+    path.push(`L ${curr.x0.toFixed(2)} ${curr.y.toFixed(2)}`);
+    path.push(`L ${curr.x1.toFixed(2)} ${curr.y.toFixed(2)}`);
+  }
+
+  return path.join(' ');
+}
+
+/** Build SVG profile: time → width, height → speed, color → absolute effort. */
 function renderDetailWorkoutChart(steps) {
   const wrap = document.getElementById('detail-chart-wrap');
   if (!wrap) return;
@@ -137,62 +185,130 @@ function renderDetailWorkoutChart(steps) {
     return;
   }
 
-  const scores = steps.map(stepEffortScore);
-  const minScore = Math.min(...scores);
-  const maxScore = Math.max(...scores);
   const maxSpeed = Math.max(...steps.map(s => s.speed), 0.1);
 
-  const W = 360;
-  const H = 112;
-  const padL = 34;
-  const padR = 10;
-  const padT = 6;
-  const padB = 20;
+  const W = 380;
+  const H = 166;
+  const padL = 40;
+  const padR = 14;
+  const padT = 18;
+  const padB = 28;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
+  const baselineY = padT + chartH;
 
-  const parts = [];
+  const points = [];
+  const overlays = [];
+  const separators = [];
   let cum = 0;
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i];
     const x0 = padL + (cum / totalSec) * chartW;
-    const segW = Math.max(0.8, (step.duration / totalSec) * chartW);
+    const segW = Math.max(1.2, (step.duration / totalSec) * chartW);
+    const x1 = x0 + segW;
     const barH = (step.speed / maxSpeed) * chartH;
-    const y = padT + chartH - barH;
-    const fill = effortFillColor(stepEffortScore(step), minScore, maxScore);
+    const y = baselineY - barH;
+    const fill = effortFillColor(step);
     const label = `${step.speed} km/h${step.incline > 0 ? ` · ${step.incline}%` : ''} · ${fmtDur(step.duration)}`;
-    parts.push(
-      `<rect x="${x0.toFixed(2)}" y="${y.toFixed(2)}" width="${segW.toFixed(2)}" height="${barH.toFixed(2)}" fill="${fill}" rx="1.5"><title>${label}</title></rect>`
-    );
+    const radius = Math.min(10, segW / 2);
+    const glossH = Math.min(barH, Math.max(8, barH * 0.55));
+    points.push({ x0, x1, y });
+    overlays.push(`
+      <g>
+        <rect x="${x0.toFixed(2)}" y="${y.toFixed(2)}" width="${segW.toFixed(2)}" height="${barH.toFixed(2)}" rx="${radius.toFixed(2)}" fill="${fill}" opacity="0.18"/>
+        <rect x="${x0.toFixed(2)}" y="${y.toFixed(2)}" width="${segW.toFixed(2)}" height="${glossH.toFixed(2)}" rx="${radius.toFixed(2)}" fill="url(#profileGloss)" opacity="0.28"/>
+        <rect x="${x0.toFixed(2)}" y="${y.toFixed(2)}" width="${segW.toFixed(2)}" height="${barH.toFixed(2)}" rx="${radius.toFixed(2)}" fill="transparent">
+          <title>${label}</title>
+        </rect>
+      </g>`);
+    if (i > 0) {
+      separators.push(
+        `<line x1="${x0.toFixed(2)}" y1="${padT + 4}" x2="${x0.toFixed(2)}" y2="${baselineY.toFixed(2)}" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`
+      );
+    }
     cum += step.duration;
   }
 
+  const areaPath = buildStepAreaPath(points, baselineY);
+  const outlinePath = buildStepOutlinePath(points);
   const totalMin = totalSec / 60;
-  const midMin = totalMin / 2;
-  const y0 = padT + chartH;
-  const tickYs = [0, 0.5, 1].map(f => padT + chartH * (1 - f));
-  const speedLabels = [0, maxSpeed / 2, maxSpeed].map(s => s.toFixed(1));
+  const guideFractions = [0, 0.33, 0.66, 1];
+  const guides = guideFractions.map(f => {
+    const y = baselineY - chartH * f;
+    const roundedSpeed = Math.round(maxSpeed * f * 2) / 2;
+    return {
+      y,
+      speed: f === 1 ? maxSpeed : roundedSpeed
+    };
+  });
+  const legendEasy = effortFillColor({ speed: 7, incline: 0 });
+  const legendSteady = effortFillColor({ speed: 10, incline: 0 });
+  const legendHard = effortFillColor({ speed: 13.5, incline: 0 });
 
   const svg = `
 <svg class="detail-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
-  <text x="${padL - 4}" y="${padT + 9}" text-anchor="end" fill="#888" font-size="9" font-family="system-ui,sans-serif">${maxSpeed.toFixed(1)}</text>
-  <text x="${padL - 4}" y="${padT + chartH / 2 + 3}" text-anchor="end" fill="#888" font-size="9" font-family="system-ui,sans-serif">${(maxSpeed / 2).toFixed(1)}</text>
-  <text x="${padL - 4}" y="${y0 + 3}" text-anchor="end" fill="#888" font-size="9" font-family="system-ui,sans-serif">0</text>
-  <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${y0}" stroke="#3a3a3a" stroke-width="1"/>
-  <line x1="${padL}" y1="${y0}" x2="${padL + chartW}" y2="${y0}" stroke="#3a3a3a" stroke-width="1"/>
-  ${parts.join('')}
-  <text x="${padL}" y="${H - 4}" fill="#888" font-size="9" font-family="system-ui,sans-serif">0</text>
-  <text x="${padL + chartW / 2}" y="${H - 4}" text-anchor="middle" fill="#888" font-size="9" font-family="system-ui,sans-serif">${midMin < 10 ? midMin.toFixed(1) : midMin.toFixed(0)} min</text>
-  <text x="${padL + chartW}" y="${H - 4}" text-anchor="end" fill="#888" font-size="9" font-family="system-ui,sans-serif">${totalMin < 10 ? totalMin.toFixed(1) : totalMin.toFixed(0)} min</text>
-</svg>
-<div class="detail-chart-legend">
-  <span><i style="background:hsl(128 58% 38%)"></i> Easier</span>
-  <span><i style="background:hsl(64 64% 43%)"></i> Moderate</span>
-  <span><i style="background:hsl(0 70% 48%)"></i> Harder</span>
-  <span style="margin-left:auto">Height = speed (km/h)</span>
-</div>`;
+  <defs>
+    <linearGradient id="chartSurface" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#171a1d"/>
+      <stop offset="100%" stop-color="#0d0f11"/>
+    </linearGradient>
+    <linearGradient id="chartGlow" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0%" stop-color="#00d4aa" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#ff6b35" stop-opacity="0.12"/>
+    </linearGradient>
+    <linearGradient id="profileArea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7ff5da" stop-opacity="0.38"/>
+      <stop offset="100%" stop-color="#7ff5da" stop-opacity="0.02"/>
+    </linearGradient>
+    <linearGradient id="profileGloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.44"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="profileGlow" x="-10%" y="-10%" width="120%" height="140%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
 
-  wrap.innerHTML = `<div class="detail-chart-title">Workout profile</div>${svg}`;
+  <rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" rx="18" fill="url(#chartSurface)" stroke="rgba(255,255,255,0.05)"/>
+  <rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" rx="18" fill="url(#chartGlow)"/>
+
+  ${guides.map(({ y, speed }) => `
+    <line x1="${padL}" y1="${y.toFixed(2)}" x2="${(padL + chartW).toFixed(2)}" y2="${y.toFixed(2)}" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+    <text x="${padL - 8}" y="${(y + 3).toFixed(2)}" text-anchor="end" fill="#8f99a3" font-size="10" font-family="system-ui,sans-serif">${fmtChartSpeed(speed)}</text>
+  `).join('')}
+
+  <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${baselineY}" stroke="rgba(255,255,255,0.12)" stroke-width="1.25"/>
+  <line x1="${padL}" y1="${baselineY}" x2="${padL + chartW}" y2="${baselineY}" stroke="rgba(255,255,255,0.12)" stroke-width="1.25"/>
+  ${separators.join('')}
+  <path d="${areaPath}" fill="url(#profileArea)"/>
+  ${overlays.join('')}
+  <path d="${outlinePath}" fill="none" stroke="#c8fff2" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" filter="url(#profileGlow)"/>
+  <path d="${outlinePath}" fill="none" stroke="rgba(255,255,255,0.92)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <text x="${padL}" y="${H - 8}" fill="#8f99a3" font-size="10" font-family="system-ui,sans-serif">0 min</text>
+  <text x="${padL + chartW / 2}" y="${H - 8}" text-anchor="middle" fill="#8f99a3" font-size="10" font-family="system-ui,sans-serif">${totalMin < 10 ? (totalMin / 2).toFixed(1) : (totalMin / 2).toFixed(0)} min</text>
+  <text x="${padL + chartW}" y="${H - 8}" text-anchor="end" fill="#8f99a3" font-size="10" font-family="system-ui,sans-serif">${totalMin < 10 ? totalMin.toFixed(1) : totalMin.toFixed(0)} min</text>
+  <text x="${padL}" y="12" fill="#8f99a3" font-size="10" font-family="system-ui,sans-serif">Speed</text>
+</svg>`;
+
+  wrap.innerHTML = `
+    <div class="detail-chart-title-row">
+      <div class="detail-chart-title">Workout profile</div>
+      <div class="detail-chart-caption">${steps.length} blocks · ${fmtDur(totalSec)}</div>
+    </div>
+    <div class="detail-chart-panel">
+      ${svg}
+      <div class="detail-chart-legend">
+        <span><i style="background:${legendEasy}"></i> Easy</span>
+        <span><i style="background:${legendSteady}"></i> Steady</span>
+        <span><i style="background:${legendHard}"></i> Hard</span>
+        <span class="detail-chart-note">Width = duration · height = speed</span>
+      </div>
+    </div>`;
   wrap.classList.remove('hidden');
 }
 

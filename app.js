@@ -142,6 +142,8 @@ let btCommandChain = Promise.resolve();
 let currentTreadmillSpeed = null;
 let currentTreadmillIncline = null;
 let wakeLockSentinel = null;
+let noSleep = null;
+let noSleepEnabled = false;
 
 async function btConnect() {
   setConnectStatus('Scanning…', '');
@@ -403,6 +405,16 @@ async function requestWakeLock() {
   }
 }
 
+async function enableNoSleep() {
+  if (noSleepEnabled || !noSleep || document.visibilityState !== 'visible') return;
+  try {
+    await noSleep.enable();
+    noSleepEnabled = true;
+  } catch (_) {
+    // Ignore fallback wake lock failures.
+  }
+}
+
 async function releaseWakeLock() {
   if (!wakeLockSentinel) return;
   try {
@@ -413,11 +425,23 @@ async function releaseWakeLock() {
   wakeLockSentinel = null;
 }
 
+function disableNoSleep() {
+  if (!noSleepEnabled || !noSleep) return;
+  try {
+    noSleep.disable();
+  } catch (_) {
+    // Ignore fallback wake lock failures.
+  }
+  noSleepEnabled = false;
+}
+
 async function syncWakeLock() {
   if (shouldHoldWakeLock()) {
     await requestWakeLock();
+    await enableNoSleep();
   } else {
     await releaseWakeLock();
+    disableNoSleep();
   }
 }
 
@@ -459,6 +483,9 @@ const App = {
   async init() {
     // Handle Strava OAuth callback before rendering anything else
     await handleStravaCallback();
+    if (typeof NoSleep !== 'undefined') {
+      noSleep = new NoSleep();
+    }
     window.addEventListener('storage', onStravaStorage);
     await handleStoredStravaCode();
     document.addEventListener('visibilitychange', () => {

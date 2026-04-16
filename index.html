@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Treadmill Workouts</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Plan View -->
+  <div id="view-plan" class="view active">
+    <header>
+      <h1>Workout Plan</h1>
+      <button id="btn-connect" class="btn-icon" title="Connect treadmill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
+        </svg>
+        <span id="connect-label">Connect</span>
+      </button>
+    </header>
+    <div id="connect-status" class="connect-status hidden"></div>
+    <div id="workout-list"></div>
+  </div>
+
+  <!-- Workout Detail View -->
+  <div id="view-detail" class="view">
+    <header>
+      <button class="btn-back" onclick="App.showPlan()">&#8592; Back</button>
+      <h1 id="detail-title"></h1>
+    </header>
+    <div id="detail-meta" class="detail-meta"></div>
+    <div id="detail-segments" class="segment-list"></div>
+    <div class="detail-actions">
+      <button id="btn-start" class="btn-primary" onclick="App.startWorkout()">Start Workout</button>
+    </div>
+  </div>
+
+  <!-- Active Workout View -->
+  <div id="view-active" class="view">
+    <div id="active-header" class="active-header">
+      <span id="active-title" class="active-title"></span>
+      <button class="btn-stop" onclick="App.stopWorkout()">&#x2715;</button>
+    </div>
+
+    <div class="active-main">
+      <div class="active-metric-row">
+        <div class="active-metric">
+          <div class="metric-value" id="active-speed">–</div>
+          <div class="metric-label">km/h</div>
+        </div>
+        <div class="active-metric">
+          <div class="metric-value" id="active-incline">–</div>
+          <div class="metric-label">% incline</div>
+        </div>
+      </div>
+
+      <div class="segment-timer">
+        <svg class="timer-ring" viewBox="0 0 120 120">
+          <circle class="ring-bg" cx="60" cy="60" r="52"/>
+          <circle class="ring-fg" id="timer-ring-fg" cx="60" cy="60" r="52"/>
+        </svg>
+        <div class="timer-inner">
+          <div id="active-seg-time" class="seg-time">0:00</div>
+          <div class="seg-time-label">remaining</div>
+        </div>
+      </div>
+
+      <div id="active-seg-label" class="active-seg-label"></div>
+
+      <div id="active-next" class="active-next"></div>
+
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-bg">
+          <div id="progress-bar" class="progress-bar-fill"></div>
+        </div>
+        <div id="progress-label" class="progress-label"></div>
+      </div>
+    </div>
+
+    <div class="active-controls">
+      <button id="btn-pause" class="btn-secondary" onclick="App.togglePause()">Pause</button>
+      <button class="btn-danger" onclick="App.stopWorkout()">Stop</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

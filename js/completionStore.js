@@ -27,6 +27,19 @@ export function markDayCompleted(day) {
   localStorage.setItem(profileCompletionKey(), JSON.stringify([...completed].sort((a, b) => a - b)));
 }
 
+export function mergeCompletedDays(days) {
+  const completed = getCompletedDays();
+  const before = completed.size;
+
+  for (const day of days) {
+    const numericDay = Number(day);
+    if (Number.isFinite(numericDay)) completed.add(numericDay);
+  }
+
+  localStorage.setItem(profileCompletionKey(), JSON.stringify([...completed].sort((a, b) => a - b)));
+  return completed.size - before;
+}
+
 export function unmarkDayCompleted(day) {
   const completed = getCompletedDays();
   completed.delete(Number(day));

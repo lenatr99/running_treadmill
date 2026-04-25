@@ -149,6 +149,7 @@
 
     <div id="strava-connected-info" class="strava-info hidden">
       <div class="strava-athlete" id="strava-athlete-name"></div>
+      <button class="btn-secondary" onclick="App.syncFromStrava()">Sync Progress from Strava</button>
       <button class="btn-disconnect" onclick="App.stravaDisconnect()">Disconnect</button>
     </div>
 
@@ -182,8 +183,21 @@
       </label>
 
       <button class="btn-secondary" onclick="App.completeStravaManualAuth()">Finish connection</button>
-      <div id="strava-auth-status" class="strava-auth-status hidden"></div>
     </div>
+
+    <div class="progress-transfer">
+      <div class="transfer-title">Progress Transfer</div>
+      <div class="transfer-actions">
+        <button class="btn-secondary" onclick="App.copyProgressCode()">Copy Progress Code</button>
+        <button class="btn-secondary" onclick="App.importProgressCode()">Import Progress Code</button>
+      </div>
+      <textarea
+        id="input-progress-code"
+        class="settings-input settings-textarea"
+        placeholder="Paste a progress code here to import completed days."
+      ></textarea>
+    </div>
+    <div id="strava-auth-status" class="strava-auth-status hidden"></div>
   </div>
 
   <script src="https://unpkg.com/nosleep.js/dist/NoSleep.min.js"></script>

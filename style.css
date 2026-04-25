@@ -630,8 +630,9 @@ header h1 {
 
 .strava-info {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
   background: var(--bg2);
   border-radius: var(--radius);
   padding: 12px 16px;
@@ -646,6 +647,7 @@ header h1 {
   padding: 6px 12px;
   font-size: 13px;
   cursor: pointer;
+  width: 100%;
 }
 
 .strava-setup { display: flex; flex-direction: column; gap: 14px; }
@@ -691,6 +693,33 @@ header h1 {
   resize: vertical;
   font-family: inherit;
   line-height: 1.4;
+}
+
+.progress-transfer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg2);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.transfer-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text2);
+  text-transform: uppercase;
+}
+
+.transfer-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.transfer-actions .btn-secondary {
+  padding: 12px;
+  font-size: 14px;
 }
 
 .strava-auth-status {

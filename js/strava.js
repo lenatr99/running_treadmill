@@ -9,10 +9,11 @@ export function stravaRedirectUri() {
 
 export function buildStravaAuthUrl(clientId) {
   const redirect = encodeURIComponent(stravaRedirectUri());
+  const scope = encodeURIComponent('activity:write,activity:read_all');
   return (
     `https://www.strava.com/oauth/authorize?client_id=${clientId}` +
     `&response_type=code&redirect_uri=${redirect}` +
-    `&approval_prompt=auto&scope=activity:write`
+    `&approval_prompt=auto&scope=${scope}`
   );
 }
 
@@ -113,4 +114,33 @@ export async function pollUpload(token, uploadId, attempts = 0) {
   if (data.error) throw new Error(data.error);
   if (data.activity_id) return data.activity_id;
   return pollUpload(token, uploadId, attempts + 1);
+}
+
+export async function fetchRecentStravaActivities(token, afterEpoch) {
+  const activities = [];
+  const baseUrl = new URL('https://www.strava.com/api/v3/athlete/activities');
+  if (afterEpoch) baseUrl.searchParams.set('after', String(afterEpoch));
+  baseUrl.searchParams.set('per_page', '100');
+
+  for (let page = 1; page <= 3; page++) {
+    baseUrl.searchParams.set('page', String(page));
+    const resp = await fetch(baseUrl.toString(), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await resp.json().catch(() => null);
+
+    if (!resp.ok) {
+      const missingScope = data?.errors?.some(error => error?.field === 'activity:read_permission');
+      if (missingScope) {
+        throw new Error('Reconnect Strava so the app can read private activities for sync.');
+      }
+      throw new Error(data?.message || `Strava sync failed with HTTP ${resp.status}`);
+    }
+
+    if (!Array.isArray(data) || data.length === 0) break;
+    activities.push(...data);
+    if (data.length < 100) break;
+  }
+
+  return activities;
 }

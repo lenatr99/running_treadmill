@@ -9,12 +9,13 @@ import {
   roundToStep,
 } from './js/plan.js';
 import { renderActiveProgressGraph, renderDetailWorkoutChart } from './js/charts.js';
-import { getCompletedDays, markDayCompleted, toggleDayCompleted } from './js/completionStore.js';
+import { getCompletedDays, markDayCompleted, mergeCompletedDays, toggleDayCompleted } from './js/completionStore.js';
 import { FtmsTreadmill } from './js/devices/ftms.js';
 import { HeartRateMonitor } from './js/devices/hr.js';
 import {
   buildStravaAuthUrl,
   exchangeStravaCode,
+  fetchRecentStravaActivities,
   getValidStravaToken,
   parseStravaAuthCode,
   pollUpload,
@@ -98,6 +99,7 @@ const App = {
     try {
       plan = await loadPlan();
       renderPlanList();
+      syncCompletedFromStrava({ silent: true }).catch(() => {});
     } catch (e) {
       document.getElementById('workout-list').innerHTML =
         `<p style="padding:24px;color:#e74c3c">Could not load plan: ${e.message}</p>`;
@@ -264,7 +266,7 @@ const App = {
       const blob = new Blob([tcx], { type: 'application/tcx+xml' });
       const form = new FormData();
       form.append('file', blob, 'workout.tcx');
-      form.append('name', workoutName);
+      form.append('name', stravaWorkoutName());
       form.append('sport_type', 'VirtualRun');
       form.append('trainer', '1');
       form.append('data_type', 'tcx');
@@ -316,6 +318,51 @@ const App = {
   closeSettings() {
     document.getElementById('settings-overlay').classList.add('hidden');
     document.getElementById('settings-modal').classList.add('hidden');
+  },
+
+  async syncFromStrava() {
+    await syncCompletedFromStrava({ silent: false });
+  },
+
+  async copyProgressCode() {
+    const code = buildProgressCode();
+    const input = document.getElementById('input-progress-code');
+    if (input) input.value = code;
+
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(code);
+        setStravaAuthStatus('Progress code copied. Open Firefox, paste it here, then tap Import Progress Code.', 'ok');
+        return;
+      } catch (_) {
+        // Leave the code in the text box for manual copy.
+      }
+    }
+
+    if (input) {
+      input.focus();
+      input.select();
+    }
+    setStravaAuthStatus('Progress code is in the box. Copy it, then paste it here in the other browser.', 'ok');
+  },
+
+  importProgressCode() {
+    const input = document.getElementById('input-progress-code');
+    const raw = input?.value || '';
+    const days = parseProgressCode(raw);
+    if (!days.length) {
+      setStravaAuthStatus('Paste a progress code from the other browser first.', 'err');
+      return;
+    }
+
+    const added = mergeCompletedDays(days);
+    renderPlanList();
+    setStravaAuthStatus(
+      added > 0
+        ? `Imported ${added} completed day${added === 1 ? '' : 's'}.`
+        : 'Those completed days were already imported.',
+      'ok'
+    );
   },
 
   stravaAuth() {
@@ -383,6 +430,7 @@ const App = {
       document.getElementById('input-auth-code').value = '';
       updateStravaButtonState();
       renderPlanList();
+      syncCompletedFromStrava({ silent: true }).catch(() => {});
       setStravaAuthStatus(`Connected as ${athleteName}`, 'ok');
       App.closeSettings();
     } catch (e) {
@@ -801,6 +849,10 @@ function showSummary() {
   showView('summary');
 }
 
+function stravaWorkoutName() {
+  return selectedWorkout ? `${dayLabel(selectedWorkout.day)}: ${workoutName}` : workoutName;
+}
+
 function generateTCX() {
   let distanceM = 0;
   const trackpoints = workoutSamples.map((s, i) => {
@@ -851,6 +903,92 @@ ${trackpoints.join('\n')}
     </Activity>
   </Activities>
 </TrainingCenterDatabase>`;
+}
+
+function normalizeActivityName(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function planSyncStartEpoch() {
+  const firstDate = plan
+    .map(w => w.date)
+    .filter(Boolean)
+    .sort()[0];
+  if (!firstDate) return null;
+
+  const start = new Date(`${firstDate}T00:00:00`);
+  if (Number.isNaN(start.getTime())) return null;
+  return Math.floor(start.getTime() / 1000) - 86400;
+}
+
+function completedDaysFromActivities(activities) {
+  const byDay = new Map(plan.map(w => [Number(w.day), w]));
+  const byGoal = new Map(
+    plan
+      .filter(w => w.workout_type !== 'rest')
+      .map(w => [normalizeActivityName(w.goal), Number(w.day)])
+  );
+  const completed = new Set();
+
+  for (const activity of activities) {
+    const name = normalizeActivityName(activity?.name);
+    if (!name) continue;
+
+    const dayMatch = name.match(/\bday\s*(\d+)\b/);
+    if (dayMatch) {
+      const day = Number(dayMatch[1]);
+      if (byDay.has(day)) {
+        completed.add(day);
+        continue;
+      }
+    }
+
+    for (const [goal, day] of byGoal.entries()) {
+      if (goal && (name === goal || name.includes(goal))) {
+        completed.add(day);
+        break;
+      }
+    }
+  }
+
+  return completed;
+}
+
+function countDayTaggedActivities(activities) {
+  return activities.filter(activity => /\bday\s*\d+\b/i.test(activity?.name || '')).length;
+}
+
+async function syncCompletedFromStrava({ silent = false } = {}) {
+  if (!plan.length || !localStorage.getItem('stravaAthleteName')) return 0;
+
+  if (!silent) setStravaAuthStatus('Syncing completed workouts from Strava...', '');
+
+  try {
+    const token = await getValidStravaToken();
+    if (!token) {
+      if (!silent) setStravaAuthStatus('Reconnect Strava before syncing.', 'err');
+      return 0;
+    }
+
+    const activities = await fetchRecentStravaActivities(token, planSyncStartEpoch());
+    const days = completedDaysFromActivities(activities);
+    const added = mergeCompletedDays(days);
+    renderPlanList();
+
+    const dayTaggedCount = countDayTaggedActivities(activities);
+    const message = added > 0
+      ? `Synced ${added} completed workout${added === 1 ? '' : 's'} from Strava.`
+      : dayTaggedCount > 0
+        ? `Found ${dayTaggedCount} day-tagged Strava activit${dayTaggedCount === 1 ? 'y' : 'ies'}; progress was already up to date.`
+        : `Scanned ${activities.length} Strava activit${activities.length === 1 ? 'y' : 'ies'}, but found no titles like "Day 1".`;
+    if (!silent) setStravaAuthStatus(message, 'ok');
+    else if (added > 0) setConnectStatus(message, 'ok');
+
+    return added;
+  } catch (e) {
+    if (!silent) setStravaAuthStatus(e.message || 'Strava sync failed.', 'err');
+    return 0;
+  }
 }
 
 async function handleStravaCallback() {

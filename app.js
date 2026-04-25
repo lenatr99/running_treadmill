@@ -285,6 +285,10 @@ const App = {
       const upload = await uploadResp.json();
       setUploadStatus('Processing...', '');
       const activityId = await pollUpload(token, upload.id);
+      if (selectedWorkout) {
+        mergeCompletedDaysWithRecoveryBetweenWorkouts([selectedWorkout.day]);
+        renderPlanList();
+      }
       setUploadStatus(`Uploaded! View on Strava (activity ${activityId})`, 'ok');
     } catch (e) {
       setUploadStatus(`Upload failed: ${e.message}`, 'err');
@@ -355,7 +359,7 @@ const App = {
       return;
     }
 
-    const added = mergeCompletedDays(days);
+    const added = mergeCompletedDaysWithRecoveryBetweenWorkouts(days);
     renderPlanList();
     setStravaAuthStatus(
       added > 0
@@ -954,6 +958,37 @@ function completedDaysFromActivities(activities) {
   return completed;
 }
 
+function recoveryDaysBetweenCompletedWorkouts(completedDays) {
+  const completed = new Set([...completedDays].map(Number).filter(Number.isFinite));
+  const completedWorkoutDays = plan
+    .filter(w => w.workout_type !== 'rest' && completed.has(Number(w.day)))
+    .map(w => Number(w.day));
+  const recoveryDays = [];
+
+  for (const workout of plan) {
+    const day = Number(workout.day);
+    if (workout.workout_type !== 'rest' || completed.has(day)) continue;
+
+    const hasCompletedBefore = completedWorkoutDays.some(completedDay => completedDay < day);
+    const hasCompletedAfter = completedWorkoutDays.some(completedDay => completedDay > day);
+    if (hasCompletedBefore && hasCompletedAfter) recoveryDays.push(day);
+  }
+
+  return recoveryDays;
+}
+
+function mergeCompletedDaysWithRecoveryBetweenWorkouts(days) {
+  const completed = getCompletedDays();
+  for (const day of days) {
+    const numericDay = Number(day);
+    if (Number.isFinite(numericDay)) completed.add(numericDay);
+  }
+
+  const recoveryDays = recoveryDaysBetweenCompletedWorkouts(completed);
+  const allDays = [...completed, ...recoveryDays];
+  return mergeCompletedDays(allDays);
+}
+
 function countDayTaggedActivities(activities) {
   return activities.filter(activity => /\bday\s*\d+\b/i.test(activity?.name || '')).length;
 }
@@ -972,12 +1007,12 @@ async function syncCompletedFromStrava({ silent = false } = {}) {
 
     const activities = await fetchRecentStravaActivities(token, planSyncStartEpoch());
     const days = completedDaysFromActivities(activities);
-    const added = mergeCompletedDays(days);
+    const added = mergeCompletedDaysWithRecoveryBetweenWorkouts(days);
     renderPlanList();
 
     const dayTaggedCount = countDayTaggedActivities(activities);
     const message = added > 0
-      ? `Synced ${added} completed workout${added === 1 ? '' : 's'} from Strava.`
+      ? `Synced ${added} completed day${added === 1 ? '' : 's'} from Strava.`
       : dayTaggedCount > 0
         ? `Found ${dayTaggedCount} day-tagged Strava activit${dayTaggedCount === 1 ? 'y' : 'ies'}; progress was already up to date.`
         : `Scanned ${activities.length} Strava activit${activities.length === 1 ? 'y' : 'ies'}, but found no titles like "Day 1".`;

@@ -25,10 +25,11 @@ const DEFAULT_SPEED_RANGE = { min: 0, max: 25, increment: 0.1 };
 const DEFAULT_INCLINE_RANGE = { min: 0, max: 20, increment: 0.5 };
 
 export class FtmsTreadmill {
-  constructor({ onStatus, onTelemetry, onWarning } = {}) {
+  constructor({ onStatus, onTelemetry, onWarning, onDisconnected } = {}) {
     this.onStatus = onStatus || (() => {});
     this.onTelemetry = onTelemetry || (() => {});
     this.onWarning = onWarning || (() => {});
+    this.onDisconnected = onDisconnected || (() => {});
     this.device = null;
     this.controlPoint = null;
     this.treadmillData = null;
@@ -86,6 +87,7 @@ export class FtmsTreadmill {
     this.telemetryWaiters.splice(0).forEach(waiter => waiter(false));
     this.onStatus('Disconnected - tap Connect to reconnect', 'err');
     this.onTelemetry({ speed: null, incline: null });
+    this.onDisconnected();
   }
 
   async readRanges(service) {
@@ -129,12 +131,13 @@ export class FtmsTreadmill {
     const retries = options.retries ?? 2;
 
     for (let attempt = 0; attempt <= retries; attempt++) {
+      const startSpeed = this.currentSpeed;
       const val = Math.round(target * 100);
       const bytes = new Uint8Array([CP.SET_SPEED, val & 0xff, (val >> 8) & 0xff]);
       await this.runCommand(CP.SET_SPEED, bytes, { timeoutMs: 3000 });
 
       if (options.verify === false) return target;
-      const confirmed = await this.waitForSpeedTarget(target, options.confirmTimeoutMs ?? 1800);
+      const confirmed = await this.waitForSpeedTarget(target, options.confirmTimeoutMs ?? 1800, startSpeed);
       if (confirmed) return target;
       if (attempt < retries) await delay(300 + attempt * 300);
     }
@@ -237,8 +240,8 @@ export class FtmsTreadmill {
     this.flushTelemetryWaiters();
   }
 
-  waitForSpeedTarget(target, timeoutMs) {
-    if (this.currentSpeed != null && Math.abs(this.currentSpeed - target) <= 0.25) {
+  waitForSpeedTarget(target, timeoutMs, startSpeed = this.currentSpeed) {
+    if (this.speedIsMovingTowardTarget(target, startSpeed)) {
       return Promise.resolve(true);
     }
 
@@ -249,7 +252,7 @@ export class FtmsTreadmill {
         resolve(result);
       };
       const waiter = () => {
-        if (this.currentSpeed != null && Math.abs(this.currentSpeed - target) <= 0.25) {
+        if (this.speedIsMovingTowardTarget(target, startSpeed)) {
           done(true);
           return true;
         }
@@ -275,6 +278,16 @@ export class FtmsTreadmill {
 
   isRecoverableControlError(error) {
     return error?.resultCode === 0x04 || error?.resultCode === 0x05;
+  }
+
+  speedIsMovingTowardTarget(target, startSpeed) {
+    if (this.currentSpeed == null) return false;
+    if (Math.abs(this.currentSpeed - target) <= 0.25) return true;
+    if (startSpeed == null || Math.abs(target - startSpeed) <= 0.25) return false;
+    const direction = Math.sign(target - startSpeed);
+    return direction > 0
+      ? this.currentSpeed >= startSpeed + 0.2
+      : this.currentSpeed <= startSpeed - 0.2;
   }
 }
 

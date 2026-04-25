@@ -26,3 +26,18 @@ export function markDayCompleted(day) {
   completed.add(Number(day));
   localStorage.setItem(profileCompletionKey(), JSON.stringify([...completed].sort((a, b) => a - b)));
 }
+
+export function unmarkDayCompleted(day) {
+  const completed = getCompletedDays();
+  completed.delete(Number(day));
+  localStorage.setItem(profileCompletionKey(), JSON.stringify([...completed].sort((a, b) => a - b)));
+}
+
+export function toggleDayCompleted(day) {
+  if (isDayCompleted(day)) {
+    unmarkDayCompleted(day);
+    return false;
+  }
+  markDayCompleted(day);
+  return true;
+}

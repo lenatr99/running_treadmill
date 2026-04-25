@@ -196,7 +196,7 @@ export function renderActiveProgressGraph(steps, elapsedSec, totalSec, state = '
   ).join('');
 
   wrap.innerHTML = `
-<svg class="active-progress-svg" viewBox="0 0 ${geom.W} ${geom.H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+<svg class="active-progress-svg" viewBox="0 0 ${geom.W} ${geom.H}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
   ${chartDefs('active')}
   <rect x="0" y="0" width="${geom.W}" height="${geom.H}" rx="10" fill="rgba(255,255,255,0.035)"/>
   <path d="${areaPath}" fill="rgba(255,255,255,0.06)"/>

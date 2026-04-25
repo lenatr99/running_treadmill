@@ -9,7 +9,7 @@ import {
   roundToStep,
 } from './js/plan.js';
 import { renderActiveProgressGraph, renderDetailWorkoutChart } from './js/charts.js';
-import { getCompletedDays, isDayCompleted, markDayCompleted } from './js/completionStore.js';
+import { getCompletedDays, markDayCompleted, toggleDayCompleted } from './js/completionStore.js';
 import { FtmsTreadmill } from './js/devices/ftms.js';
 import { HeartRateMonitor } from './js/devices/hr.js';
 import {
@@ -55,6 +55,11 @@ const TIMER_RING_CIRCUMFERENCE = 327;
 const treadmill = new FtmsTreadmill({
   onStatus: setConnectStatus,
   onWarning: message => setConnectStatus(message, 'err'),
+  onDisconnected: () => {
+    document.getElementById('btn-connect')?.classList.remove('connected');
+    const label = document.getElementById('connect-label');
+    if (label) label.textContent = 'Connect';
+  },
   onTelemetry: ({ speed, incline }) => {
     currentTreadmillSpeed = speed;
     currentTreadmillIncline = incline;
@@ -65,6 +70,11 @@ const treadmill = new FtmsTreadmill({
 
 const hrMonitor = new HeartRateMonitor({
   onStatus: setHRStatus,
+  onDisconnected: () => {
+    document.getElementById('btn-connect-hr')?.classList.remove('connected');
+    const label = document.getElementById('connect-hr-label');
+    if (label) label.textContent = 'Polar H10';
+  },
   onHeartRate: hr => {
     currentHR = hr;
     const el = document.getElementById('active-hr');
@@ -229,6 +239,12 @@ const App = {
   skipSegment() {
     if (!getActiveStep() || awaitingWorkoutStop || workoutFinishing) return;
     advanceToStep(activeStepIdx + 1);
+  },
+
+  toggleCompleted(day, event) {
+    event?.stopPropagation();
+    toggleDayCompleted(day);
+    renderPlanList();
   },
 
   async uploadToStrava() {
@@ -708,7 +724,13 @@ function renderPlanList() {
         <div class="card-name">${isCompleted ? '&#10003; ' : ''}${w.goal}</div>
         <div class="card-meta">${metaStr}</div>
       </div>
-      <span class="card-badge ${badgeClass(w.workout_type)}">${badgeLabel(w.workout_type)}</span>`;
+      <span class="card-badge ${badgeClass(w.workout_type)}">${badgeLabel(w.workout_type)}</span>
+      <button
+        class="btn-complete-toggle ${isCompleted ? 'completed' : ''}"
+        title="${isCompleted ? 'Mark incomplete' : 'Mark complete'}"
+        aria-label="${isCompleted ? 'Mark day incomplete' : 'Mark day complete'}"
+        onclick="App.toggleCompleted(${w.day}, event)"
+      >${isCompleted ? '&#10003;' : ''}</button>`;
 
     if (!isRest) card.addEventListener('click', () => App.showDetail(w.day));
     container.appendChild(card);

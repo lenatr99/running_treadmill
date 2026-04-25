@@ -2,9 +2,10 @@ const HR_SERVICE = '0000180d-0000-1000-8000-00805f9b34fb';
 const HR_MEASUREMENT = '00002a37-0000-1000-8000-00805f9b34fb';
 
 export class HeartRateMonitor {
-  constructor({ onStatus, onHeartRate } = {}) {
+  constructor({ onStatus, onHeartRate, onDisconnected } = {}) {
     this.onStatus = onStatus || (() => {});
     this.onHeartRate = onHeartRate || (() => {});
+    this.onDisconnected = onDisconnected || (() => {});
     this.device = null;
     this.currentHR = null;
   }
@@ -33,6 +34,7 @@ export class HeartRateMonitor {
     this.currentHR = null;
     this.onHeartRate(null);
     this.onStatus('HR monitor disconnected', 'err');
+    this.onDisconnected();
   }
 
   handleMeasurement(event) {
